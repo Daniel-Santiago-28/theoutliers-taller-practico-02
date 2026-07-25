@@ -78,17 +78,73 @@ def _seccion_perfil_calidad(resultado: ResultadoLimpieza) -> None:
                     f"valores no canónicos → {variantes}")
 
 
+# Qué implicó realmente cada exclusión. "Excluido" significa apartado de un
+# cálculo concreto, nunca eliminado del dataset: la fila sigue presente con su
+# bandera y con el resto de sus campos intactos.
+_EFECTO_EXCLUSION = {
+    "inventario_stock_negativo": (
+        "Se truncó `Stock_Actual` a 0 y se marcó `Stock_Negativo_Corregido`. "
+        "El SKU permanece en el maestro con todos sus demás campos."),
+    "inventario_costo_atipico": (
+        "Se anuló `Costo_Unitario_USD` y se marcó `Costo_Atipico_Excluido`. "
+        "El SKU sigue en el maestro; solo queda fuera del cálculo de margen."),
+    "transacciones_fecha_futura": (
+        "Se marcó `Fecha_Futura`. La venta conserva su importe y cuenta en el "
+        "ingreso total; solo se omite en las series de tiempo."),
+    "transacciones_cantidad_invalida": (
+        "Se anuló `Cantidad_Vendida` y se marcó `Cantidad_Invalida`. La "
+        "transacción conserva su `Precio_Venta_Final`."),
+    "transacciones_entrega_999": (
+        "Se anuló el código de error y se imputó el tiempo de entrega; se "
+        "marcó `Entrega_Codigo_Error`. La transacción queda intacta."),
+    "feedback_rating_producto_fuera_escala": (
+        "Se anuló `Rating_Producto`. La opinión conserva su rating logístico, "
+        "su NPS y su comentario."),
+    "feedback_id_colisionado_eliminado": (
+        "⚠️ **Única exclusión que sí elimina filas.** Solo ocurre con la "
+        "política 'Eliminar repeticiones' del panel lateral."),
+}
+
+
 def _seccion_excluidos(resultado: ResultadoLimpieza) -> None:
-    """Visor de registros excluidos: nada se descarta en silencio."""
-    st.subheader("Registros excluidos")
-    st.caption(
-        "Ningún registro se elimina en silencio. Todo lo que quedó fuera de "
-        "un cálculo permanece aquí, consultable y descargable."
-    )
+    """Visor de registros apartados de algún cálculo.
+
+    La guía de validación exige una opción de "ver registros excluidos". El
+    término se conserva por trazabilidad con el enunciado, pero se explicita
+    que exclusión no es eliminación: salvo la política opcional de duplicados,
+    ninguna fila se borra.
+    """
+    st.subheader("Registros excluidos de un cálculo")
+
+    filas_antes = sum(len(f) for f in resultado.crudos.values())
+    filas_despues = sum(len(f) for f in resultado.limpios.values())
+    marcados = sum(len(f) for f in resultado.registro.excluidos.values())
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Filas en los archivos originales", f"{filas_antes:,}")
+    col2.metric("Filas tras la curaduría", f"{filas_despues:,}",
+                delta=f"{filas_despues - filas_antes:,}",
+                delta_color="off" if filas_antes == filas_despues else "normal")
+    col3.metric("Registros apartados de algún cálculo", f"{marcados:,}")
+
+    if filas_antes == filas_despues:
+        st.success(
+            "**Excluido no significa eliminado.** No se borró una sola fila. "
+            "Cada registro listado abajo sigue presente en el dataset con "
+            "todos sus demás campos; lo único que ocurre es que el valor "
+            "corrupto se anuló y la fila quedó marcada con una bandera, de "
+            "modo que un KPI puntual pueda omitirla sin que el ingreso total "
+            "deje de ser trazable hasta el archivo original.", icon="✅")
+    else:
+        st.warning(
+            f"La política de duplicados activa eliminó "
+            f"{filas_antes - filas_despues:,} filas. Con la política "
+            f"'Conservar y reparar la llave' no se pierde ningún registro.",
+            icon="⚠️")
 
     excluidos = resultado.registro.excluidos
     if not excluidos:
-        st.info("No se excluyó ningún registro.")
+        st.info("No se apartó ningún registro.")
         return
 
     etiquetas = {
@@ -96,13 +152,20 @@ def _seccion_excluidos(resultado: ResultadoLimpieza) -> None:
         for clave, frame in excluidos.items()
     }
     seleccion = st.selectbox(
-        "Motivo de exclusión", list(excluidos),
+        "Motivo", list(excluidos),
         format_func=lambda c: etiquetas[c], key="auditoria_excluidos")
 
+    efecto = _EFECTO_EXCLUSION.get(seleccion)
+    if efecto:
+        st.markdown(f"**Qué se hizo con estas filas:** {efecto}")
+
     frame = excluidos[seleccion]
+    st.caption(
+        "Se muestra el registro tal como venía en el archivo original, para "
+        "que pueda compararse contra el valor curado.")
     st.dataframe(frame, use_container_width=True, hide_index=True)
     st.download_button(
-        f"Descargar registros excluidos ({len(frame):,})",
+        f"Descargar estos {len(frame):,} registros",
         data=frame.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"excluidos_{seleccion}.csv", mime="text/csv",
         key="descarga_excluidos")
