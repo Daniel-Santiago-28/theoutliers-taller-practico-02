@@ -1,0 +1,15 @@
+# Núcleo de datos
+pandas>=2.2
+numpy>=1.26
+scipy>=1.13          # pruebas de significancia y correlaciones con p-valor
+
+# Dashboard
+streamlit>=1.38
+plotly>=5.22
+
+# Integración IA
+groq>=0.11
+python-dotenv>=1.0   # carga de GROQ_API_KEY en ejecución local
+
+# Calidad
+pytest>=8.0
