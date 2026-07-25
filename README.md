@@ -33,10 +33,23 @@ Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 | Fase | Contenido | Estado |
 |---|---|---|
 | 0 | Scaffolding, ingesta forense y perfilado de línea base | ✅ Completa |
-| 1 | Limpieza, imputación justificada y Health Score | ⬜ Pendiente |
+| 1 | Limpieza, imputación justificada y Health Score | ✅ Completa |
 | 2 | Integración, venta fantasma y feature engineering | ⬜ Pendiente |
 | 3 | Dashboard Streamlit y resolución de las 5 preguntas | ⬜ Pendiente |
 | 4 | Módulo de IA (Groq / Llama-3) y documento de hallazgos | ⬜ Pendiente |
+
+### Resultado de la curaduría (Fase 1)
+
+| Activo | Health Score antes | Después | Mejora |
+|---|---:|---:|---:|
+| Inventario | 89,75 | 99,54 | +9,79 pp |
+| Transacciones | 93,36 | 99,03 | +5,67 pp |
+| Feedback | 78,13 | 98,19 | +20,06 pp |
+
+Cero filas eliminadas: la política por defecto **marca y conserva** en lugar de
+borrar, de modo que el ingreso total siga siendo trazable hasta el archivo
+original. 317 registros quedan excluidos de algún cálculo pero permanecen
+consultables y descargables desde el dashboard.
 
 ## Instalación
 
@@ -76,7 +89,7 @@ python -m scripts.perfilado_inicial
 # 2. Suite de pruebas (congela la línea base de calidad)
 python -m pytest tests/ -v
 
-# 3. Dashboard  (disponible desde la Fase 3)
+# 3. Dashboard — pestañas Auditoría y Transparencia operativas
 streamlit run app.py
 ```
 
@@ -130,7 +143,10 @@ Declaradas en [`src/config.py`](src/config.py) con su justificación:
 | `Ventas_Web` en `Ciudad_Destino` | Es un canal, no un lugar: se anula la geografía y se marca con bandera, preservando la trazabilidad del ingreso |
 | `Satisfaccion_NPS` | Se conserva el crudo y se agrega la segmentación Detractor / Pasivo / Promotor |
 | `Lead_Time_Dias` `"25-30 días"` | Punto medio del intervalo (27,5): imputación estándar para datos censurados por intervalo |
-| Costos atípicos | Filtro de Tukey (IQR × 1,5); los excluidos se marcan, no se borran, y son consultables en el dashboard |
+| Costos atípicos | Filtro de Tukey (IQR × 1,5) **más un piso de negocio de USD 1**, porque la valla inferior de Tukey es negativa y no detecta el costo de USD 0,05 |
+| Media vs mediana | No se decide a mano: se mide la asimetría de cada columna y se aplica la regla de Bulmer (\|a\| < 0,5 → media; si no, mediana). El estadístico queda registrado en la bitácora |
+| Nominales casi uniformes | `Categoria` (12,2 % ausente) y `Estado_Envio` (16,8 %) **no se imputan**: sin moda dominante, rellenar inyectaría masa artificial en la dimensión por la que luego se segmenta |
+| Duplicados de feedback | **No existen.** Lo que hay es una colisión de llave surrogate: los `Feedback_ID` repetidos apuntan a transacciones y clientes distintos. Se repara la llave en vez de borrar 500 opiniones legítimas |
 
 ## Licencia y contexto
 
