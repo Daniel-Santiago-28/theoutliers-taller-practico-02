@@ -13,8 +13,9 @@ import logging
 
 import streamlit as st
 
-from src import cleaning, config, ingest
-from ui.tabs import auditoria, transparencia
+from src import cleaning, filters, ingest, integration
+from ui import sidebar
+from ui.tabs import auditoria, cliente, operaciones, transparencia
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,68 +30,45 @@ st.set_page_config(
 
 
 @st.cache_data(show_spinner="Auditando y curando los datos…")
-def cargar_resultado(politica_duplicados: str):
-    """Ejecuta el pipeline completo, cacheado entre interacciones.
-
-    Args:
-        politica_duplicados: Política aplicada a la colisión de Feedback_ID.
-
-    Returns:
-        ResultadoLimpieza con crudos, limpios, bitácora y Health Scores.
-    """
+def cargar_curaduria(politica_duplicados: str):
+    """Ejecuta la limpieza de la Fase 1, cacheada entre interacciones."""
     return cleaning.ejecutar_pipeline(politica_duplicados=politica_duplicados)
 
 
-def construir_sidebar() -> dict:
-    """Dibuja la barra lateral y devuelve la configuración elegida."""
-    with st.sidebar:
-        st.title("TechLogistics S.A.S.")
-        st.caption("Sistema de Soporte a la Decisión")
-
-        st.markdown("### Curaduría")
-        politica = st.radio(
-            "Colisión de `Feedback_ID`",
-            options=["conservar", "eliminar"],
-            format_func=lambda v: {
-                "conservar": "Conservar y reparar la llave",
-                "eliminar": "Eliminar repeticiones",
-            }[v],
-            help=(
-                "El activo de feedback no contiene duplicados reales: los "
-                "identificadores repetidos apuntan a transacciones distintas, "
-                "con clientes y calificaciones distintos. Conservar repara la "
-                "llave sin perder opiniones; eliminar aplica la lectura "
-                "literal del enunciado y descarta 500 registros legítimos."),
-        )
-
-        st.divider()
-        refrescar = st.button("Refrescar análisis", use_container_width=True,
-                              type="primary")
-        if refrescar:
-            st.cache_data.clear()
-
-        st.divider()
-        st.caption(
-            f"Validación temporal contra la fecha del sistema: "
-            f"**{config.fecha_corte()}**  \n"
-            "Los filtros de fecha, categoría y bodega se habilitan en la "
-            "Fase 3, junto con las pestañas de negocio.")
-
-    return {"politica_duplicados": politica}
+@st.cache_data(show_spinner="Integrando la Sola Fuente de Verdad…")
+def cargar_ssot(politica_duplicados: str):
+    """Construye la SSOT de la Fase 2 sobre los datos ya curados."""
+    curaduria = cargar_curaduria(politica_duplicados)
+    return integration.construir_ssot(curaduria.limpios, curaduria.crudos)
 
 
 def main() -> None:
     """Punto de entrada de la aplicación."""
-    opciones = construir_sidebar()
+    # La curaduría se ejecuta con la política por defecto para poder poblar
+    # los controles del panel lateral; si el usuario la cambia, Streamlit
+    # vuelve a ejecutar el script y el caché devuelve la variante elegida.
+    politica_inicial = st.session_state.get("politica_duplicados", "conservar")
 
     try:
-        resultado = cargar_resultado(opciones["politica_duplicados"])
+        integrado = cargar_ssot(politica_inicial)
     except ingest.ErrorIngesta as exc:
         st.error(f"No fue posible cargar los datos fuente.\n\n**{exc}**")
+        st.stop()
+    except integration.ErrorIntegracion as exc:
+        st.error(f"Falló la integración de los activos.\n\n**{exc}**")
         st.stop()
     except (ValueError, KeyError, TypeError) as exc:
         st.error(f"Falló el proceso de curaduría.\n\n**{exc}**")
         st.stop()
+
+    seleccion, politica = sidebar.construir(integrado.ssot)
+
+    if politica != politica_inicial:
+        st.session_state["politica_duplicados"] = politica
+        st.rerun()
+
+    curaduria = cargar_curaduria(politica)
+    recorte = filters.aplicar_filtros(integrado.ssot, seleccion)
 
     pestanas = st.tabs([
         "Auditoría", "Transparencia", "Operaciones", "Cliente",
@@ -98,15 +76,14 @@ def main() -> None:
     ])
 
     with pestanas[0]:
-        auditoria.renderizar(resultado)
+        auditoria.renderizar(curaduria)
     with pestanas[1]:
-        transparencia.renderizar(resultado)
+        transparencia.renderizar(curaduria)
     with pestanas[2]:
-        st.info("Disponible en la Fase 3: rentabilidad, venta fantasma y "
-                "cuellos de botella logísticos.", icon="🚧")
+        operaciones.renderizar(recorte, seleccion.describir(),
+                               integrado.diagnostico_fantasma)
     with pestanas[3]:
-        st.info("Disponible en la Fase 3: paradoja de fidelidad y riesgo "
-                "operativo por bodega.", icon="🚧")
+        cliente.renderizar(recorte, seleccion.describir())
     with pestanas[4]:
         st.info("Disponible en la Fase 4: recomendaciones estratégicas "
                 "generadas con Groq / Llama-3.", icon="🚧")
