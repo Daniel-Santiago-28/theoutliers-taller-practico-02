@@ -34,7 +34,7 @@ Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 |---|---|---|
 | 0 | Scaffolding, ingesta forense y perfilado de línea base | ✅ Completa |
 | 1 | Limpieza, imputación justificada y Health Score | ✅ Completa |
-| 2 | Integración, venta fantasma y feature engineering | ⬜ Pendiente |
+| 2 | Integración, venta fantasma y feature engineering | ✅ Completa |
 | 3 | Dashboard Streamlit y resolución de las 5 preguntas | ⬜ Pendiente |
 | 4 | Módulo de IA (Groq / Llama-3) y documento de hallazgos | ⬜ Pendiente |
 
@@ -50,6 +50,19 @@ Cero filas eliminadas: la política por defecto **marca y conserva** en lugar de
 borrar, de modo que el ingreso total siga siendo trazable hasta el archivo
 original. 317 registros quedan excluidos de algún cálculo pero permanecen
 consultables y descargables desde el dashboard.
+
+### Sola Fuente de Verdad (Fase 2)
+
+`src/integration.py` construye una tabla de 10.000 filas —una por transacción—
+uniendo los tres activos. El riesgo central no es unir, es **preservar el
+grano**: 767 transacciones acumulan entre 2 y 4 opiniones de clientes, así que
+un `merge` directo produciría 10.877 filas e inflaría el ingreso en
+**USD 6.539.892 (+8,77 %)**. El feedback se agrega a grano de transacción
+*antes* de unirse, y los merges declaran `validate='m:1'` / `'1:1'` para que
+cualquier fan-out futuro falle de forma ruidosa.
+
+La reconciliación contra el archivo original cuadra al centavo:
+**USD 74.572.403,78** en ambos lados, diferencia 0,00.
 
 ## Instalación
 

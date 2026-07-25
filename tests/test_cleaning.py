@@ -14,10 +14,10 @@ import pytest
 from src import audit, cleaning, config
 
 
-@pytest.fixture(scope="module")
-def resultado(datos_crudos):
-    """Pipeline completo con la política de duplicados recomendada."""
-    return cleaning.ejecutar_pipeline(datos_crudos)
+@pytest.fixture(scope="session")
+def resultado(pipeline_limpieza):
+    """Alias local del pipeline compartido definido en conftest."""
+    return pipeline_limpieza
 
 
 class TestHealthScore:
