@@ -100,8 +100,8 @@ Línea base **ANTES** de cualquier limpieza. Generado por `scripts/perfilado_ini
 
 ## Validación temporal
 
-Fecha de corte declarada: **2026-01-31**
+Evaluado contra la fecha del sistema: **2026-07-25**
 
-- **Fecha_Venta**: rango 2024-09-23 .. 2026-02-04 | no parseables: **0** | posteriores al corte: **75**
+- **Fecha_Venta**: rango 2024-09-23 .. 2026-02-04 | no parseables: **0** | posteriores al corte: **0**
 - **Ultima_Revision**: rango 2024-03-04 .. 2026-01-31 | no parseables: **0** | posteriores al corte: **0**
-- Antigüedad de la última revisión de stock (días): mín 0, mediana 342, máx 698
+- Antigüedad de la última revisión de stock (días): mín 175, mediana 516, máx 873

@@ -71,7 +71,8 @@ def construir_sidebar() -> dict:
 
         st.divider()
         st.caption(
-            f"Fecha de corte: **{config.FECHA_CORTE}**  \n"
+            f"Validación temporal contra la fecha del sistema: "
+            f"**{config.fecha_corte()}**  \n"
             "Los filtros de fecha, categoría y bodega se habilitan en la "
             "Fase 3, junto con las pestañas de negocio.")
 

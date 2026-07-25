@@ -8,7 +8,7 @@ para que el informe de hallazgos y la pestaña de Transparencia del dashboard
 puedan citarla sin riesgo de desincronización.
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 # --------------------------------------------------------------------------
@@ -29,12 +29,28 @@ ARCHIVO_FEEDBACK = DIR_CRUDO / "feedback_clientes_v2.csv"
 # Temporalidad
 # --------------------------------------------------------------------------
 
-# Decisión: se fija la fecha de corte al cierre del proyecto en lugar de usar
-# datetime.now(). Motivo: el análisis debe ser determinista y reproducible
-# (los mismos KPIs hoy que en la sustentación). Con datetime.now() el conjunto
-# de "fechas futuras" cambiaría según el día de ejecución, volviendo no
-# auditable el caso de prueba de fechas futuras de la guía de validación.
-FECHA_CORTE = date(2026, 1, 31)
+
+def fecha_corte() -> date:
+    """Fecha de referencia para la validación temporal.
+
+    Es la fecha de ejecución del análisis, conforme al criterio de la Guía de
+    Validación ("validación temporal contra ``datetime.now()``") y a la
+    indicación expresa del docente de no anclar el proyecto a enero de 2026.
+
+    Se expone como función y no como constante de módulo a propósito: una
+    constante quedaría congelada en el instante del ``import``, de modo que un
+    servidor de larga vida seguiría comparando contra el día en que arrancó.
+    Evaluar en cada llamada es lo que hace que la comparación sea realmente
+    contra "ahora".
+
+    Consecuencia asumida: el análisis deja de ser determinista en el tiempo.
+    Un registro clasificado hoy como vigente puede seguir siéndolo mañana,
+    pero el conjunto de "fechas futuras" solo puede encogerse conforme avanza
+    el calendario. Los conteos temporales del informe deben citarse siempre
+    junto a la fecha en que se generaron.
+    """
+    return datetime.now().date()
+
 
 # Formatos detectados en el perfilado: los dos archivos con fechas usan
 # convenciones distintas entre sí. Esta discrepancia es en sí un hallazgo

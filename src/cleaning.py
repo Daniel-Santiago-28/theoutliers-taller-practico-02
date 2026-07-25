@@ -35,6 +35,9 @@ UMBRAL_ASIMETRIA = 0.5
 # demasiado uniforme para que su moda sea representativa.
 UMBRAL_ENTROPIA_UNIFORME = 0.95
 
+# Sufijo de las banderas que distinguen un valor estimado de uno observado.
+SUFIJO_IMPUTADO = "_Imputado"
+
 
 # --------------------------------------------------------------------------
 # Bitácora de limpieza
@@ -147,12 +150,28 @@ def _entropia_normalizada(serie: pd.Series) -> float:
     return float(entropia / np.log2(len(frecuencias)))
 
 
+def sufijo_imputado(columna: str) -> str:
+    """Nombre de la bandera que marca los valores imputados de una columna."""
+    return f"{columna}{SUFIJO_IMPUTADO}"
+
+
 def _imputar_numerica(
     df: pd.DataFrame, columna: str, dataset: str, log: RegistroLimpieza,
     justificacion: str,
 ) -> None:
-    """Imputa nulos de una columna numérica con la estrategia que dicten los datos."""
-    faltantes = int(df[columna].isna().sum())
+    """Imputa nulos de una columna numérica con la estrategia que dicten los datos.
+
+    Siempre deja una bandera ``<columna>_Imputado`` a nivel de fila, incluso
+    cuando no hubo nada que imputar. Sin ella, un valor estimado sería
+    indistinguible de uno observado en el resto del análisis: la imputación por
+    media clava los faltantes en el centro exacto de la distribución, lo que
+    contrae la varianza y atenúa cualquier correlación que use esa columna. La
+    bandera permite excluirlos cuando se analice dispersión o correlación.
+    """
+    mask_faltante = df[columna].isna()
+    faltantes = int(mask_faltante.sum())
+    df[sufijo_imputado(columna)] = mask_faltante
+
     if not faltantes:
         return
 
@@ -167,7 +186,8 @@ def _imputar_numerica(
         dataset=dataset, columna=columna, accion=f"Imputación por {estrategia}",
         criterio=f"Regla de Bulmer sobre la asimetría de {columna}",
         justificacion=justificacion, filas_afectadas=faltantes,
-        valor_aplicado=f"{valor:.2f}", evidencia=evidencia,
+        valor_aplicado=f"{valor:.2f}",
+        evidencia=f"{evidencia}; marcados en {sufijo_imputado(columna)}",
     )
 
 
@@ -341,16 +361,17 @@ def limpiar_inventario(crudo: pd.DataFrame) -> tuple[pd.DataFrame, RegistroLimpi
     )
 
     # --- Última revisión --------------------------------------------------
+    corte_inventario = config.fecha_corte()
     df["Ultima_Revision"] = pd.to_datetime(
         df["Ultima_Revision"], format=config.FORMATO_FECHA_INVENTARIO,
         errors="coerce")
     df["Antiguedad_Revision_Dias"] = (
-        pd.Timestamp(config.FECHA_CORTE) - df["Ultima_Revision"]).dt.days
+        pd.Timestamp(corte_inventario) - df["Ultima_Revision"]).dt.days
     log.agregar(
         dataset=ds, columna="Ultima_Revision",
         accion="Tipado a fecha y derivación de antigüedad",
-        criterio=f"Formato ISO {config.FORMATO_FECHA_INVENTARIO} contra "
-                 f"fecha de corte {config.FECHA_CORTE}",
+        criterio=f"Formato ISO {config.FORMATO_FECHA_INVENTARIO} contra la "
+                 f"fecha de ejecución ({corte_inventario})",
         justificacion=(
             "La antigüedad del último conteo físico es el insumo directo de la "
             "pregunta de riesgo operativo: mide hace cuánto una bodega opera "
@@ -412,7 +433,8 @@ def limpiar_transacciones(
     df["Fecha_Venta"] = pd.to_datetime(
         df["Fecha_Venta"], format=config.FORMATO_FECHA_TRANSACCIONES,
         errors="coerce")
-    corte = pd.Timestamp(config.FECHA_CORTE)
+    hoy = config.fecha_corte()
+    corte = pd.Timestamp(hoy)
     mask_futura = (df["Fecha_Venta"] > corte).fillna(False)
     df["Fecha_Futura"] = mask_futura
     if mask_futura.any():
@@ -421,19 +443,20 @@ def limpiar_transacciones(
         dataset=ds, columna="Fecha_Venta",
         accion="Estandarización y marcado de fechas futuras",
         criterio=f"Formato {config.FORMATO_FECHA_TRANSACCIONES}; validación "
-                 f"contra fecha de corte {config.FECHA_CORTE}",
+                 f"temporal contra datetime.now() ({hoy})",
         justificacion=(
-            "Se valida contra una fecha de corte fija y no contra "
-            "datetime.now() para que el análisis sea determinista: los mismos "
-            "KPIs hoy que en la sustentación. Las ventas posteriores al corte "
-            "se marcan en vez de eliminarse, de modo que el ingreso total "
-            "siga siendo trazable al archivo original, pero se excluyen de las "
-            "series de tiempo para no mostrar actividad fuera del periodo real."),
+            "Una venta no puede estar registrada en el futuro: si la fecha "
+            "supera el momento de ejecución, el registro es un error de "
+            "captura del sistema origen. Las ventas afectadas se marcan en vez "
+            "de eliminarse, de modo que el ingreso total siga siendo trazable "
+            "al archivo original, pero se excluyen de las series de tiempo "
+            "para no mostrar actividad fuera del periodo real de operación."),
         filas_afectadas=int(mask_futura.sum()),
         valor_aplicado="bandera Fecha_Futura",
         evidencia=(f"rango {df['Fecha_Venta'].min():%Y-%m-%d} a "
                    f"{df['Fecha_Venta'].max():%Y-%m-%d}; "
-                   f"{int(df['Fecha_Venta'].isna().sum())} no parseables"),
+                   f"{int(df['Fecha_Venta'].isna().sum())} no parseables; "
+                   f"evaluado contra {hoy}"),
     )
 
     # --- Cantidad vendida -------------------------------------------------
@@ -631,6 +654,7 @@ def limpiar_feedback(
         if n:
             log.excluir(f"feedback_{columna.lower()}_fuera_escala",
                         df.loc[mask])
+        df[f"{columna}_Fuera_Escala"] = mask
         df[columna] = df[columna].astype("Float64").mask(mask)
         if n:
             log.agregar(
@@ -858,7 +882,7 @@ class ResultadoLimpieza:
     def reporte_dict(self) -> dict:
         """Reporte de limpieza serializable a JSON."""
         return {
-            "fecha_corte": str(config.FECHA_CORTE),
+            "fecha_ejecucion": str(config.fecha_corte()),
             "resumen_por_dataset": self.comparativo().to_dict("records"),
             "decisiones": [a.a_dict() for a in self.registro.acciones],
             "registros_excluidos": {

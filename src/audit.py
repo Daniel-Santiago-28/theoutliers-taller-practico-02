@@ -184,7 +184,7 @@ REGLAS_VALIDEZ: dict[str, list[tuple]] = {
         ("Precio_Venta_Final", lambda s: _serie_numerica(s) <= 0,
          "Precio de venta nulo o negativo"),
         ("Fecha_Venta", lambda s: _fecha_posterior_a_corte(s),
-         f"Venta posterior a la fecha de corte ({config.FECHA_CORTE})"),
+         "Venta con fecha posterior al momento de ejecución del análisis"),
         ("Ciudad_Destino", lambda s: _es_ciudad_no_geografica(s),
          "Valor de canal ('Ventas_Web') en una columna geográfica"),
     ],
@@ -210,14 +210,14 @@ REGLAS_VALIDEZ: dict[str, list[tuple]] = {
 
 
 def _fecha_posterior_a_corte(serie: pd.Series) -> pd.Series:
-    """Marca fechas de venta posteriores a la fecha de corte declarada."""
+    """Marca fechas de venta posteriores al momento de ejecución."""
     if pd.api.types.is_datetime64_any_dtype(serie):
         fechas = serie
     else:
         fechas = pd.to_datetime(
             serie, format=config.FORMATO_FECHA_TRANSACCIONES, errors="coerce"
         )
-    return (fechas > pd.Timestamp(config.FECHA_CORTE)).fillna(False)
+    return (fechas > pd.Timestamp(config.fecha_corte())).fillna(False)
 
 
 def _es_ciudad_no_geografica(serie: pd.Series) -> pd.Series:

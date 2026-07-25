@@ -6,6 +6,7 @@ no pueda alterarlas en silencio.
 """
 
 import json
+from datetime import datetime
 
 import pandas as pd
 import pytest
@@ -110,12 +111,25 @@ class TestTransacciones:
 
     def test_fechas_futuras_marcadas_no_borradas(self, resultado):
         """Guía: la serie de tiempo no debe mostrar actividad fuera del
-        periodo real, pero el ingreso debe seguir siendo trazable."""
+        periodo real, pero el ingreso debe seguir siendo trazable.
+
+        La aserción se hace contra ``datetime.now()`` y no contra un conteo
+        fijo: la validación temporal es relativa al momento de ejecución, así
+        que un número quemado convertiría este test en una bomba de tiempo.
+        """
         trx = resultado.limpios["transacciones"]
-        assert len(trx) == 10_000
-        assert int(trx["Fecha_Futura"].sum()) == 75
+        assert len(trx) == 10_000, "No se debe perder ninguna transacción"
+
+        hoy = pd.Timestamp(config.fecha_corte())
+        esperadas = int((trx["Fecha_Venta"] > hoy).sum())
+        assert int(trx["Fecha_Futura"].sum()) == esperadas
+
         vigentes = trx.loc[~trx["Fecha_Futura"], "Fecha_Venta"]
-        assert vigentes.max() <= pd.Timestamp(config.FECHA_CORTE)
+        assert vigentes.max() <= hoy
+
+    def test_fecha_corte_es_el_momento_de_ejecucion(self):
+        """La fecha de referencia se evalúa en cada llamada, no al importar."""
+        assert config.fecha_corte() == datetime.now().date()
 
     def test_ciudades_normalizadas(self, resultado):
         ciudades = set(resultado.limpios["transacciones"]["Ciudad_Destino"]
@@ -224,6 +238,63 @@ class TestEstrategiaDeImputacion:
         for accion in imputaciones:
             assert "asimetría=" in accion.evidencia
             assert accion.justificacion and accion.valor_aplicado
+
+
+class TestTrazabilidadDeImputaciones:
+    """Un valor estimado nunca debe ser indistinguible de uno observado."""
+
+    ESPERADAS = {
+        "inventario": {"Stock_Actual_Imputado": 100,
+                       "Lead_Time_Dias_Imputado": 403},
+        "transacciones": {"Costo_Envio_Imputado": 834,
+                          "Tiempo_Entrega_Real_Imputado": 50},
+        "feedback": {"Edad_Cliente_Imputado": 23},
+    }
+
+    @pytest.mark.parametrize("dataset,banderas", ESPERADAS.items())
+    def test_banderas_presentes_y_exactas(self, resultado, dataset, banderas):
+        df = resultado.limpios[dataset]
+        for bandera, esperado in banderas.items():
+            assert bandera in df.columns, f"Falta la bandera {bandera}"
+            assert int(df[bandera].sum()) == esperado
+
+    def test_toda_imputacion_registrada_tiene_bandera(self, resultado):
+        """Ninguna imputación de la bitácora puede quedar sin marcar."""
+        for accion in resultado.registro.acciones:
+            if not accion.accion.startswith("Imputación"):
+                continue
+            df = resultado.limpios[accion.dataset]
+            bandera = cleaning.sufijo_imputado(accion.columna)
+            assert bandera in df.columns
+            assert int(df[bandera].sum()) == accion.filas_afectadas
+
+    def test_bandera_coincide_con_el_valor_imputado(self, resultado):
+        """Las filas marcadas deben llevar exactamente el valor estimado."""
+        trx = resultado.limpios["transacciones"]
+        imputados = trx.loc[trx["Costo_Envio_Imputado"], "Costo_Envio"]
+        assert imputados.nunique() == 1, "Todas comparten el mismo estimador"
+        assert imputados.notna().all()
+
+    def test_permite_analizar_solo_lo_observado(self, resultado):
+        """El caso de uso de la bandera: recuperar la dispersión original."""
+        trx = resultado.limpios["transacciones"]
+        observados = trx.loc[~trx["Costo_Envio_Imputado"], "Costo_Envio"]
+        assert len(observados) == 9_166
+        # La imputación por media contrae la varianza; sin la bandera esa
+        # atenuación sería invisible y sesgaría cualquier correlación.
+        assert observados.std() > trx["Costo_Envio"].std()
+
+    def test_ratings_fuera_de_escala_marcados(self, resultado):
+        fbk = resultado.limpios["feedback"]
+        assert int(fbk["Rating_Producto_Fuera_Escala"].sum()) == 30
+        assert fbk.loc[fbk["Rating_Producto_Fuera_Escala"],
+                       "Rating_Producto"].isna().all()
+
+    def test_banderas_no_afectan_el_health_score(self, resultado):
+        """El score se mide sobre el esquema original, no sobre las derivadas."""
+        for nombre in resultado.crudos:
+            assert (resultado.scores_despues[nombre].columnas
+                    == len(config.ESQUEMAS[nombre]))
 
 
 class TestReporteDeLimpieza:

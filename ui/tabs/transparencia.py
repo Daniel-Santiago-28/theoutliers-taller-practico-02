@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import json
 
+import pandas as pd
 import streamlit as st
 
-from src import config
+from src import cleaning, config
 from src.cleaning import ResultadoLimpieza
 from ui import theme
 
@@ -97,6 +98,49 @@ def _seccion_bitacora(resultado: ResultadoLimpieza) -> None:
         })
 
 
+def _seccion_trazabilidad(resultado: ResultadoLimpieza) -> None:
+    """Inventario de banderas: qué valores son estimados y cuáles observados."""
+    st.subheader("Trazabilidad a nivel de fila")
+    st.caption(
+        "Cada corrección deja una bandera booleana en la propia fila, no solo "
+        "una línea en la bitácora. Así un valor estimado nunca queda "
+        "indistinguible de uno observado y el análisis puede excluirlo cuando "
+        "mida dispersión o correlación."
+    )
+
+    filas = []
+    for nombre, df in resultado.limpios.items():
+        for columna in df.columns:
+            if str(df[columna].dtype) not in {"bool", "boolean"}:
+                continue
+            if columna in config.ESQUEMAS[nombre]:
+                continue  # es un dato del negocio, no una bandera de curaduría
+            filas.append({
+                "Activo": nombre,
+                "Bandera": columna,
+                "Filas marcadas": int(df[columna].sum()),
+                "% del activo": round(100 * float(df[columna].mean()), 2),
+            })
+
+    if not filas:
+        st.info("No hay banderas de trazabilidad.")
+        return
+
+    tabla = pd.DataFrame(filas).sort_values(
+        ["Activo", "Filas marcadas"], ascending=[True, False])
+    st.dataframe(tabla, use_container_width=True, hide_index=True)
+
+    imputadas = tabla[tabla["Bandera"].str.endswith(cleaning.SUFIJO_IMPUTADO)]
+    if not imputadas.empty:
+        st.warning(
+            f"**{int(imputadas['Filas marcadas'].sum()):,} valores son "
+            f"estimados, no observados.** La imputación por media fija esos "
+            f"registros en el centro exacto de la distribución, lo que contrae "
+            f"la varianza y atenúa cualquier correlación que los incluya. "
+            f"Para análisis de dispersión o correlación, filtre por la bandera "
+            f"correspondiente.", icon="⚠️")
+
+
 def _seccion_descargas(resultado: ResultadoLimpieza) -> None:
     """Botones de descarga del reporte de limpieza."""
     st.subheader("Descargar el reporte de limpieza")
@@ -131,10 +175,11 @@ def renderizar(resultado: ResultadoLimpieza) -> None:
     """
     st.header("Transparencia del proceso")
     st.markdown(
-        f"Toda la curaduría se ejecuta contra una fecha de corte fija "
-        f"(**{config.FECHA_CORTE}**) en lugar de la fecha del sistema, de modo "
-        f"que los resultados sean reproducibles: los mismos números hoy que en "
-        f"cualquier ejecución posterior."
+        f"La validación temporal se ejecuta contra la fecha del sistema "
+        f"(**{config.fecha_corte()}**): una venta registrada después de ese "
+        f"instante es un error de captura del sistema origen. Los conteos "
+        f"temporales de esta pestaña deben citarse siempre junto a la fecha en "
+        f"que se generaron."
     )
 
     _fila_indicadores(resultado)
@@ -142,5 +187,7 @@ def renderizar(resultado: ResultadoLimpieza) -> None:
     _seccion_antes_despues(resultado)
     st.divider()
     _seccion_bitacora(resultado)
+    st.divider()
+    _seccion_trazabilidad(resultado)
     st.divider()
     _seccion_descargas(resultado)

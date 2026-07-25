@@ -144,7 +144,8 @@ def _reporte_temporal(datos: dict[str, pd.DataFrame],
     """Valida rangos de fecha y detecta registros posteriores al corte."""
     salida.append(f"\n{'-' * 70}\n")
     salida.append("## Validación temporal\n")
-    salida.append(f"Fecha de corte declarada: **{config.FECHA_CORTE}**\n")
+    salida.append(f"Evaluado contra la fecha del sistema: "
+                  f"**{config.fecha_corte()}**\n")
 
     fechas_trx = pd.to_datetime(
         datos["transacciones"]["Fecha_Venta"],
@@ -156,7 +157,7 @@ def _reporte_temporal(datos: dict[str, pd.DataFrame],
         format=config.FORMATO_FECHA_INVENTARIO,
         errors="coerce",
     )
-    corte = pd.Timestamp(config.FECHA_CORTE)
+    corte = pd.Timestamp(config.fecha_corte())
 
     for etiqueta, serie in (("Fecha_Venta", fechas_trx),
                             ("Ultima_Revision", fechas_inv)):

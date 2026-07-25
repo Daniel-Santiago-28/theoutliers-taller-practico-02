@@ -22,7 +22,7 @@ El perfilado forense de los datos crudos confirma la sospecha y la cuantifica:
 | Ventas cuyo SKU no existe en el maestro de inventario | **1.751 de 10.000 (17,5 %)** |
 | Ingreso sin trazabilidad de costo | **USD 12,98 M de 74,57 M (17,4 %)** |
 | Transacciones catalogadas con margen unitario negativo | **3.193 de 8.249 (38,7 %)** |
-| Antigüedad mediana del último conteo físico de stock | **342 días** |
+| Antigüedad mediana del último conteo físico de stock | **516 días** (relativa a la fecha de ejecución) |
 | Envíos con código de error `999` en lugar de tiempo real | **50** |
 | Registros de feedback duplicados | **500 (11,1 %)** |
 
@@ -138,7 +138,7 @@ Declaradas en [`src/config.py`](src/config.py) con su justificación:
 
 | Decisión | Criterio adoptado |
 |---|---|
-| Fecha de corte | `2026-01-31` fija y configurable, no `datetime.now()`, para que el análisis sea determinista y reproducible |
+| Validación temporal | Contra `datetime.now()`, expuesto como `config.fecha_corte()`. Es una función y no una constante de módulo a propósito: una constante quedaría congelada en el instante del `import` |
 | SKU sin catálogo | Left join; se conservan, se etiquetan y se excluyen solo del margen. Nunca se descartan |
 | `Ventas_Web` en `Ciudad_Destino` | Es un canal, no un lugar: se anula la geografía y se marca con bandera, preservando la trazabilidad del ingreso |
 | `Satisfaccion_NPS` | Se conserva el crudo y se agrega la segmentación Detractor / Pasivo / Promotor |
@@ -147,6 +147,7 @@ Declaradas en [`src/config.py`](src/config.py) con su justificación:
 | Media vs mediana | No se decide a mano: se mide la asimetría de cada columna y se aplica la regla de Bulmer (\|a\| < 0,5 → media; si no, mediana). El estadístico queda registrado en la bitácora |
 | Nominales casi uniformes | `Categoria` (12,2 % ausente) y `Estado_Envio` (16,8 %) **no se imputan**: sin moda dominante, rellenar inyectaría masa artificial en la dimensión por la que luego se segmenta |
 | Duplicados de feedback | **No existen.** Lo que hay es una colisión de llave surrogate: los `Feedback_ID` repetidos apuntan a transacciones y clientes distintos. Se repara la llave en vez de borrar 500 opiniones legítimas |
+| Trazabilidad | Toda corrección deja una bandera booleana **en la propia fila** (`*_Imputado`, `*_Fuera_Escala`, `Cantidad_Invalida`, …), no solo una línea en la bitácora: un valor estimado nunca queda indistinguible de uno observado |
 
 ## Licencia y contexto
 
