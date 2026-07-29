@@ -35,7 +35,7 @@ Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 | 0 | Scaffolding, ingesta forense y perfilado de línea base | ✅ Completa |
 | 1 | Limpieza, imputación justificada y Health Score | ✅ Completa |
 | 2 | Integración, venta fantasma y feature engineering | ✅ Completa |
-| 3 | Dashboard Streamlit y resolución de las 5 preguntas | ⬜ Pendiente |
+| 3 | Dashboard Streamlit y resolución de las 5 preguntas | ✅ Completa |
 | 4 | Módulo de IA (Groq / Llama-3) y documento de hallazgos | ⬜ Pendiente |
 
 ### Resultado de la curaduría (Fase 1)
@@ -63,6 +63,30 @@ cualquier fan-out futuro falle de forma ruidosa.
 
 La reconciliación contra el archivo original cuadra al centavo:
 **USD 74.572.403,78** en ambos lados, diferencia 0,00.
+
+### Las cinco preguntas de alta gerencia (Fase 3)
+
+| # | Pregunta | Respuesta | Evidencia |
+|---|---|---|---|
+| 1 | Fuga de capital | **Ninguna de las dos hipótesis de la junta.** No es producto gancho ni una falla del canal Online: el precio se fija con independencia del costo | ρ = 0,014 (p = 0,217); pérdida de USD 7,58 M repartida entre 878 SKU |
+| 2 | Crisis logística | **Ninguna zona requiere cambio de operador porque ninguna es peor.** El problema es del proceso completo | 0 de 10 correlaciones sobreviven a Bonferroni; **60,2 %** de envíos adversos, uniforme |
+| 3 | Venta invisible | **Falla de catálogo, no fraude.** Seis criterios independientes coinciden | **USD 12,98 M = 17,40 %** del ingreso; 480 SKU en bloque contiguo |
+| 4 | Paradoja de fidelidad | **La paradoja no existe:** ni el stock ni la satisfacción difieren entre categorías. La queja dominante es precio, no calidad | rating p = 0,995; stock p = 0,079; Precio/Valor = 43,7 % de las quejas |
+| 5 | Riesgo operativo | **Las bodegas sí operan a ciegas, pero el riesgo aún no se ha cobrado** | **17,1 meses** de mediana sin conteo físico; tickets p = 0,835 |
+
+Tres de las cinco preguntas apuntan a relaciones que el dato no sostiene. En
+esos casos el dashboard aplica un **tratamiento de dos niveles**: primero el
+ranking que pide el enunciado, con las celdas no significativas atenuadas y el
+hallazgo nulo declarado de forma explícita; después el análisis alternativo
+sobre las señales que sí portan información.
+
+El criterio es el mismo en las cinco: un hallazgo se declara sólido solo si es
+**significativo y de tamaño de efecto no trivial**. Con muestras de 8.000 a
+10.000 filas el valor p se vuelve trivialmente pequeño, así que separar ambas
+condiciones es lo que impide confundir «el test detectó algo» con «esto
+importa». El caso más claro es la pregunta 1: la diferencia entre canales tiene
+p = 0,0047 pero una V de Cramér de 0,04, y el panel la rotula *Significativo
+pero irrelevante*.
 
 ## Instalación
 

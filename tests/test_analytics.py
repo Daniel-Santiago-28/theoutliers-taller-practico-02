@@ -303,10 +303,6 @@ class TestCorreccionMultiple:
 class TestPregunta2CrisisLogistica:
     """El NPS no discrimina: la respuesta se da en dos niveles."""
 
-    @pytest.fixture(scope="class")
-    def q2(self, integrado):
-        return analytics.analizar_crisis_logistica(integrado.ssot)
-
     def test_ninguna_correlacion_sobrevive_a_bonferroni(self, q2):
         assert q2.kpis["correlaciones_significativas"] == 0
         assert q2.kpis["correlaciones_evaluadas"] == 10
@@ -336,11 +332,6 @@ class TestPregunta2CrisisLogistica:
 
 class TestPregunta3VentaInvisible:
     """La única pregunta con hallazgo limpio y cuantificable."""
-
-    @pytest.fixture(scope="class")
-    def q3(self, integrado):
-        return analytics.analizar_venta_invisible(
-            integrado.ssot, integrado.diagnostico_fantasma)
 
     def test_cifras_principales(self, q3):
         assert q3.kpis["transacciones"] == 1_751
@@ -374,10 +365,6 @@ class TestPregunta3VentaInvisible:
 class TestPregunta4ParadojaFidelidad:
     """La paradoja no existe porque nada difiere entre categorías."""
 
-    @pytest.fixture(scope="class")
-    def q4(self, integrado):
-        return analytics.analizar_paradoja_fidelidad(integrado.ssot)
-
     def test_sentimiento_no_difiere(self, q4):
         assert not q4.veredicto_sentimiento.concluyente
 
@@ -404,10 +391,6 @@ class TestPregunta4ParadojaFidelidad:
 
 class TestPregunta5RiesgoOperativo:
     """La ceguera de inventario es real; su castigo aún no aparece."""
-
-    @pytest.fixture(scope="class")
-    def q5(self, integrado):
-        return analytics.analizar_riesgo_operativo(integrado.ssot)
 
     def test_antiguedad_alarmante(self, q5):
         assert q5.kpis["antiguedad_meses"] > 12, (
@@ -438,23 +421,18 @@ class TestPregunta5RiesgoOperativo:
 class TestRobustezBajoFiltro:
     """Ninguna pregunta puede reventar con un recorte extremo."""
 
-    @pytest.fixture(scope="class")
-    def vacio(self, integrado):
-        from datetime import date
-        seleccion = filters.Filtros(fecha_desde=date(2030, 1, 1))
-        return filters.aplicar_filtros(integrado.ssot, seleccion)
-
-    def test_todas_las_preguntas_toleran_recorte_vacio(self, vacio, integrado):
-        assert vacio.empty
+    def test_todas_las_preguntas_toleran_recorte_vacio(
+            self, recorte_vacio, integrado):
+        assert recorte_vacio.empty
         for funcion in (analytics.analizar_fuga_capital,
                         analytics.analizar_crisis_logistica,
                         analytics.analizar_paradoja_fidelidad,
                         analytics.analizar_riesgo_operativo):
-            resultado = funcion(vacio)
+            resultado = funcion(recorte_vacio)
             assert resultado.diagnostico
 
         invisible = analytics.analizar_venta_invisible(
-            vacio, integrado.diagnostico_fantasma)
+            recorte_vacio, integrado.diagnostico_fantasma)
         assert invisible.kpis == {}
 
     def test_una_sola_ciudad_no_permite_comparar(self, integrado):
