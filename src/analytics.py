@@ -713,6 +713,24 @@ def analizar_venta_invisible(
 
     serie = _fantasma_mensual(ssot)
     estabilidad = float(serie["pct_fantasma"].std()) if len(serie) > 1 else 0.0
+
+    # El diagnóstico de origen describe el bloque de SKU huérfanos del maestro
+    # completo. Si el recorte del usuario no contiene ninguna venta fantasma,
+    # afirmarlo aquí sería atribuirle al recorte un problema que no tiene.
+    if not len(fantasma):
+        veredicto_origen = ("No aplica: este recorte no contiene ventas sin "
+                            "catálogo")
+        diagnostico = (
+            "**El recorte analizado no contiene ventas sin catálogo oficial.** "
+            "Todo su ingreso proviene de productos registrados en el maestro "
+            "de inventario, de modo que su margen sí es calculable y "
+            "auditable. La fuga por venta invisible se concentra fuera de este "
+            "filtro.")
+        return VentaInvisible(
+            kpis=kpis, por_canal=_fantasma_por_canal(ssot), serie_mensual=serie,
+            criterios_diagnostico=pd.DataFrame(),
+            veredicto_origen=veredicto_origen, diagnostico=diagnostico)
+
     veredicto_origen = (diagnostico_fantasma or {}).get(
         "veredicto", "Diagnóstico de origen no disponible")
 

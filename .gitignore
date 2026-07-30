@@ -214,5 +214,10 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Streamlit
-.streamlit/secrets.toml
+# Streamlit — denegación por defecto.
+# Ignorar solo `secrets.toml` no basta: un archivo nuevo con otro nombre
+# (secrets_example.txt, secrets.bak, mis_claves.toml) quedaría versionado sin
+# que nadie lo note. Se ignora toda la carpeta y se permite explícitamente
+# solo la plantilla, que nunca debe contener una clave real.
+.streamlit/*
+!.streamlit/secrets.toml.example

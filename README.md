@@ -36,7 +36,8 @@ Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 | 1 | Limpieza, imputación justificada y Health Score | ✅ Completa |
 | 2 | Integración, venta fantasma y feature engineering | ✅ Completa |
 | 3 | Dashboard Streamlit y resolución de las 5 preguntas | ✅ Completa |
-| 4 | Módulo de IA (Groq / Llama-3) y documento de hallazgos | ⬜ Pendiente |
+| 4a | Módulo de IA (Groq / Llama-3) | ✅ Completa |
+| 4b | Documento de hallazgos en PDF | ⬜ Pendiente |
 
 ### Resultado de la curaduría (Fase 1)
 
@@ -79,6 +80,27 @@ esos casos el dashboard aplica un **tratamiento de dos niveles**: primero el
 ranking que pide el enunciado, con las celdas no significativas atenuadas y el
 hallazgo nulo declarado de forma explícita; después el análisis alternativo
 sobre las señales que sí portan información.
+
+### Módulo de IA (Fase 4)
+
+`src/ai_insights.py` pide a Llama-3 tres párrafos de recomendación sobre el
+recorte que el usuario tiene aplicado. El riesgo de diseño no es técnico sino
+de contenido: que el modelo invente cifras o recomiende actuar sobre hallazgos
+que ya sabemos que son ruido. Tres defensas:
+
+1. **El modelo no ve los datos, ve un resumen calculado.** Recibe 42 cifras ya
+   computadas por `analytics`; no tiene el DataFrame ni puede agregar nada por
+   su cuenta, así que toda cifra que use tiene que estar en ese bloque.
+2. **El resumen incluye los veredictos estadísticos.** Cada hallazgo viaja con
+   su etiqueta de solidez y el prompt de sistema **prohíbe explícitamente**
+   recomendar acciones sobre lo marcado como no concluyente. Sin esto, un
+   modelo servicial redactaría con toda seguridad *«cambie de operador en
+   Barranquilla»* sobre una correlación de 0,039.
+3. **Temperatura 0,3 y salida acotada.** Se busca análisis reproducible.
+
+La pestaña ofrece un botón *Auditar exactamente qué recibió el modelo* con el
+prompt íntegro y el resumen descargable en JSON, para que cualquier afirmación
+sea verificable contra su fuente.
 
 El criterio es el mismo en las cinco: un hallazgo se declara sólido solo si es
 **significativo y de tamaño de efecto no trivial**. Con muestras de 8.000 a

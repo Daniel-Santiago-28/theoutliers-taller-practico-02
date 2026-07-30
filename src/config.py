@@ -314,4 +314,4 @@ NOMBRE_VAR_ENTORNO_GROQ = "GROQ_API_KEY"
 MODELO_GROQ = "llama-3.3-70b-versatile"
 TEMPERATURA_GROQ = 0.3   # bajo: se busca análisis reproducible, no creatividad
 MAX_TOKENS_GROQ = 1200
-TIMEOUT_GROQ_SEG = 45
+TIMEOUT_GROQ_SEG = 60

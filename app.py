@@ -15,7 +15,8 @@ import streamlit as st
 
 from src import cleaning, filters, ingest, integration
 from ui import sidebar
-from ui.tabs import auditoria, cliente, operaciones, transparencia
+from ui.tabs import (auditoria, cliente, insights_ia, operaciones,
+                     transparencia)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -85,8 +86,10 @@ def main() -> None:
     with pestanas[3]:
         cliente.renderizar(recorte, seleccion.describir())
     with pestanas[4]:
-        st.info("Disponible en la Fase 4: recomendaciones estratégicas "
-                "generadas con Groq / Llama-3.", icon="🚧")
+        insights_ia.renderizar(
+            recorte, seleccion.describir(),
+            ingreso_total=float(integrado.ssot["Ingreso_Bruto"].sum()),
+            diagnostico_fantasma=integrado.diagnostico_fantasma)
 
 
 if __name__ == "__main__":
