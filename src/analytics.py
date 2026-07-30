@@ -82,6 +82,19 @@ class Veredicto:
             return "Significativo pero irrelevante"
         return "Hallazgo sólido"
 
+    def efecto_texto(self, decimales: int = 4) -> str:
+        """Tamaño de efecto formateado, tolerante a la ausencia de medición.
+
+        Cuando la muestra no alcanza el mínimo, ``tamano_efecto`` queda en
+        ``None`` y cualquier intento de formatearlo como número revienta. Esa
+        situación no es excepcional —basta con que el usuario acote el filtro a
+        dos días— así que la conversión a texto vive aquí y no se repite en cada
+        sitio que la necesite.
+        """
+        if self.tamano_efecto is None:
+            return "no medido"
+        return f"{self.tamano_efecto:.{decimales}f}"
+
     def a_dict(self) -> dict:
         return {
             "pregunta": self.pregunta,
@@ -1071,7 +1084,7 @@ def analizar_riesgo_operativo(ssot: pd.DataFrame) -> RiesgoOperativo:
             f"**{nombre_peor}** es el más desatendido, pero la tasa de tickets "
             f"es idéntica en todos (p = {veredicto_tickets.p_valor:.4f}) y no "
             f"correlaciona con la antigüedad "
-            f"(rho = {veredicto_correlacion.tamano_efecto:.4f}). "
+            f"(rho = {veredicto_correlacion.efecto_texto()}). "
             f"La lectura correcta no es que no haya riesgo: es que el riesgo "
             f"**aún no se ha cobrado**. Con una mediana de "
             f"{kpis['antiguedad_meses']:.1f} meses sin verificar el inventario "

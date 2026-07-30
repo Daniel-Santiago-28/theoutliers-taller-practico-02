@@ -45,13 +45,15 @@ def cargar_ssot(politica_duplicados: str):
 
 def main() -> None:
     """Punto de entrada de la aplicación."""
-    # La curaduría se ejecuta con la política por defecto para poder poblar
-    # los controles del panel lateral; si el usuario la cambia, Streamlit
-    # vuelve a ejecutar el script y el caché devuelve la variante elegida.
-    politica_inicial = st.session_state.get("politica_duplicados", "conservar")
+    # La política de curaduría se lee del estado del panel lateral antes de
+    # dibujarlo: el panel necesita la SSOT para poblar sus opciones, y la SSOT
+    # necesita la política. Streamlit aplica el estado de los widgets antes de
+    # ejecutar el script, así que en la pasada siguiente a un cambio el valor
+    # ya está disponible aquí y no hace falta forzar un rerun.
+    politica = sidebar.politica_actual()
 
     try:
-        integrado = cargar_ssot(politica_inicial)
+        integrado = cargar_ssot(politica)
     except ingest.ErrorIngesta as exc:
         st.error(f"No fue posible cargar los datos fuente.\n\n**{exc}**")
         st.stop()
@@ -62,24 +64,43 @@ def main() -> None:
         st.error(f"Falló el proceso de curaduría.\n\n**{exc}**")
         st.stop()
 
-    seleccion, politica = sidebar.construir(integrado.ssot)
-
-    if politica != politica_inicial:
-        st.session_state["politica_duplicados"] = politica
-        st.rerun()
+    seleccion, _ = sidebar.construir(integrado.ssot)
 
     curaduria = cargar_curaduria(politica)
     recorte = filters.aplicar_filtros(integrado.ssot, seleccion)
+    ingreso_total = float(integrado.ssot["Ingreso_Bruto"].sum())
+
+    sidebar.mostrar_alcance(recorte, len(integrado.ssot),
+                            curaduria.reporte_csv())
+
+    st.title("Sistema de Soporte a la Decisión")
+    if seleccion.hay_filtro_activo:
+        st.info(
+            f"**Filtro activo** · {seleccion.describir()} "
+            f"Las pestañas de Operaciones, Cliente e Insights de IA analizan "
+            f"únicamente estas {len(recorte):,} transacciones.", icon="🔎")
+    else:
+        st.caption(
+            f"Analizando la operación completa: {len(integrado.ssot):,} "
+            f"transacciones. Use el panel lateral para acotar el análisis.")
 
     pestanas = st.tabs([
         "Auditoría", "Transparencia", "Operaciones", "Cliente",
         "Insights de IA",
     ])
 
+    # Auditoría y Transparencia describen la curaduría de los archivos fuente,
+    # que se ejecutó una sola vez sobre los tres activos completos. Recortarlas
+    # con el filtro del usuario produciría un Health Score "de las Laptops
+    # vendidas por Online", una cifra con apariencia de autoridad y sin
+    # significado: la limpieza no se hizo por subconjunto. Reciben la curaduría
+    # completa a propósito, y así lo declaran en pantalla.
     with pestanas[0]:
         auditoria.renderizar(curaduria)
     with pestanas[1]:
         transparencia.renderizar(curaduria)
+
+    # Las tres pestañas de negocio reciben el recorte filtrado.
     with pestanas[2]:
         operaciones.renderizar(recorte, seleccion.describir(),
                                integrado.diagnostico_fantasma)
@@ -87,8 +108,7 @@ def main() -> None:
         cliente.renderizar(recorte, seleccion.describir())
     with pestanas[4]:
         insights_ia.renderizar(
-            recorte, seleccion.describir(),
-            ingreso_total=float(integrado.ssot["Ingreso_Bruto"].sum()),
+            recorte, seleccion.describir(), ingreso_total=ingreso_total,
             diagnostico_fantasma=integrado.diagnostico_fantasma)
 
 

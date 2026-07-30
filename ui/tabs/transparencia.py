@@ -48,13 +48,13 @@ def _seccion_antes_despues(resultado: ResultadoLimpieza) -> None:
     comparativo = resultado.comparativo()
 
     st.plotly_chart(theme.grafico_dumbbell(comparativo),
-                    use_container_width=True)
+                    use_container_width=True, key="g_transp_dumbbell")
 
     dataset = st.selectbox(
         "Ver dimensiones de", list(resultado.crudos),
         format_func=str.capitalize, key="transparencia_dataset")
     st.plotly_chart(theme.grafico_dimensiones(comparativo, dataset),
-                    use_container_width=True)
+                    use_container_width=True, key="g_transp_dimensiones")
 
     st.info(
         "**Por qué la completitud puede bajar.** En transacciones cae de "
@@ -181,6 +181,11 @@ def renderizar(resultado: ResultadoLimpieza) -> None:
         f"temporales de esta pestaña deben citarse siempre junto a la fecha en "
         f"que se generaron."
     )
+    st.caption(
+        "**Alcance:** igual que Auditoría, esta pestaña ignora los filtros del "
+        "panel lateral. Documenta el proceso de curaduría completo, que se "
+        "ejecutó una única vez sobre los tres archivos fuente. Los filtros "
+        "actúan sobre las pestañas de negocio.")
 
     _fila_indicadores(resultado)
     st.divider()

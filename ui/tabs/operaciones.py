@@ -52,14 +52,14 @@ def _seccion_pregunta_1(recorte: pd.DataFrame) -> None:
     izquierda, derecha = st.columns(2)
     with izquierda:
         st.plotly_chart(theme.grafico_volumen_vs_margen(resultado.por_sku),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p1_volumen")
         components.mostrar_veredicto(
             resultado.veredicto_volumen,
             "¿Es una pérdida aceptable por volumen (producto gancho)?")
 
     with derecha:
         st.plotly_chart(theme.grafico_tasa_por_canal(resultado.por_canal),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p1_canal")
         components.mostrar_veredicto(
             resultado.veredicto_canal,
             "¿Es una falla de precios del canal Online?")
@@ -81,7 +81,7 @@ def _seccion_pregunta_1(recorte: pd.DataFrame) -> None:
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
         st.plotly_chart(theme.grafico_costo_vs_precio(resultado.por_sku),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p1_costo_precio")
     with derecha:
         components.mostrar_veredicto(
             resultado.veredicto_pricing,
@@ -94,7 +94,7 @@ def _seccion_pregunta_1(recorte: pd.DataFrame) -> None:
             "debajo de lo que costó comprarlo.")
 
     st.plotly_chart(theme.grafico_pareto_perdida(resultado.pareto),
-                    use_container_width=True)
+                    use_container_width=True, key="g_p1_pareto")
 
     st.divider()
 
@@ -163,12 +163,14 @@ def _seccion_pregunta_2(recorte: pd.DataFrame) -> None:
         st.plotly_chart(
             theme.grafico_correlaciones(
                 resultado.correlaciones_ciudad, "Ciudad_Destino",
-                "Demora vs NPS por ciudad"), use_container_width=True)
+                "Demora vs NPS por ciudad"), use_container_width=True,
+            key="g_p2_corr_ciudad")
     with derecha:
         st.plotly_chart(
             theme.grafico_correlaciones(
                 resultado.correlaciones_bodega, "Bodega_Origen",
-                "Demora vs NPS por bodega"), use_container_width=True)
+                "Demora vs NPS por bodega"), use_container_width=True,
+            key="g_p2_corr_bodega")
 
     if kpis["correlaciones_significativas"] == 0:
         st.error(
@@ -198,7 +200,8 @@ def _seccion_pregunta_2(recorte: pd.DataFrame) -> None:
         st.plotly_chart(
             theme.grafico_desempeno_logistico(
                 resultado.desempeno_ciudad, "Ciudad_Destino",
-                "Envíos fallidos por ciudad"), use_container_width=True)
+                "Envíos fallidos por ciudad"), use_container_width=True,
+            key="g_p2_fallo_ciudad")
         components.mostrar_veredicto(
             resultado.veredicto_adversa,
             "¿La tasa de fallo se concentra en alguna plaza?")
@@ -206,7 +209,8 @@ def _seccion_pregunta_2(recorte: pd.DataFrame) -> None:
         st.plotly_chart(
             theme.grafico_desempeno_logistico(
                 resultado.desempeno_bodega, "Bodega_Origen",
-                "Envíos fallidos por bodega"), use_container_width=True)
+                "Envíos fallidos por bodega"), use_container_width=True,
+            key="g_p2_fallo_bodega")
         components.mostrar_veredicto(
             resultado.veredicto_tiempo,
             "¿El tiempo de entrega difiere entre plazas?")
@@ -254,11 +258,11 @@ def _seccion_pregunta_3(recorte: pd.DataFrame, diagnostico: dict) -> None:
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
         st.plotly_chart(theme.grafico_fantasma_mensual(resultado.serie_mensual),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p3_mensual")
     with derecha:
         st.plotly_chart(
             theme.grafico_fantasma_por_canal(resultado.por_canal),
-            use_container_width=True)
+            use_container_width=True, key="g_p3_canal")
 
     st.markdown("#### ¿Falla de catálogo o fraude?")
     st.caption(

@@ -44,8 +44,7 @@ def mostrar_veredicto(veredicto: Veredicto, titulo: str) -> None:
 
         col1, col2, col3 = st.columns(3)
         col1.metric(veredicto.nombre_efecto or "Estadístico",
-                    f"{veredicto.tamano_efecto:.3f}"
-                    if veredicto.tamano_efecto is not None else "—",
+                    veredicto.efecto_texto(decimales=3),
                     help="Tamaño de efecto: cuánto importa la diferencia")
         col2.metric("Valor p", f"{veredicto.p_valor:.4f}",
                     help="Probabilidad de ver esto si no hubiera efecto real")

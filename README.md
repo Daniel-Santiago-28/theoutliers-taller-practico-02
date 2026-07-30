@@ -145,8 +145,11 @@ Obtenga una clave gratuita en [console.groq.com/keys](https://console.groq.com/k
 # 1. Perfilado forense de los datos crudos -> docs/perfilado_inicial.md
 python -m scripts.perfilado_inicial
 
-# 2. Suite de pruebas (congela la línea base de calidad)
-python -m pytest tests/ -v
+# 2. Suite de pruebas completa (263 pruebas, ~50 s)
+python -m pytest
+
+# Iteración rápida, sin las pruebas de humo de la app (~10 s)
+python -m pytest -m "not smoke"
 
 # 3. Dashboard — pestañas Auditoría y Transparencia operativas
 streamlit run app.py
@@ -176,6 +179,23 @@ la interfaz. `ui/` solo presenta.
 ├── scripts/                    # utilidades ejecutables
 └── tests/                      # casos de la guía de validación como tests
 ```
+
+### Alcance de los filtros: 3 de 5 pestañas
+
+El panel lateral filtra por fecha, categoría, bodega y canal, y ese recorte
+propaga a **Operaciones, Cliente e Insights de IA**. Las pestañas de
+**Auditoría y Transparencia lo ignoran a propósito**: describen la curaduría de
+los archivos fuente, que se ejecutó una única vez sobre los tres activos
+completos. Un «Health Score de las Laptops vendidas por Online» no existe como
+magnitud —la limpieza no se hizo por subconjunto— y presentarlo daría una cifra
+con apariencia de autoridad y sin significado. Ambas pestañas declaran su
+alcance en pantalla, y `tests/test_app_wiring.py` congela la decisión: si
+alguien intenta pasarles un recorte, la firma cambia y el test falla.
+
+Una consecuencia que conviene tener presente al demostrar la app: **filtrar por
+categoría o por bodega excluye necesariamente toda la venta fantasma**, porque
+ambos atributos provienen del maestro de inventario en el que esos SKU no
+existen. Es correcto, no un error de filtrado.
 
 ### Dos decisiones de diseño que vale la pena señalar
 

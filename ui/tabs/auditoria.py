@@ -51,7 +51,7 @@ def _seccion_perfil_calidad(resultado: ResultadoLimpieza) -> None:
         perfil = audit.perfil_nulidad(resultado.crudos[dataset])
         st.plotly_chart(
             theme.grafico_nulidad(perfil, f"Ausencia por columna · {dataset}"),
-            use_container_width=True)
+            use_container_width=True, key="g_auditoria_nulidad")
 
     with derecha:
         st.markdown("**Reglas de negocio violadas**")
@@ -183,6 +183,12 @@ def renderizar(resultado: ResultadoLimpieza) -> None:
         "invalidarían cualquier conclusión de negocio si se usaran tal cual. "
         "Esta pestaña cuantifica el daño **antes** de tocar un solo dato."
     )
+    st.caption(
+        "**Alcance:** esta pestaña ignora los filtros del panel lateral a "
+        "propósito. La curaduría se ejecutó una sola vez sobre los archivos "
+        "fuente completos, así que un Health Score de un subconjunto no "
+        "existiría como magnitud: la limpieza no se hizo por recorte. Los "
+        "filtros sí actúan sobre Operaciones, Cliente e Insights de IA.")
 
     st.markdown("#### Health Score de los datos crudos")
     _tarjetas_score(resultado, "antes")

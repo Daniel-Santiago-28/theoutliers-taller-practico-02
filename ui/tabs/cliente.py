@@ -57,7 +57,7 @@ def _seccion_pregunta_4(recorte: pd.DataFrame) -> None:
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
         st.plotly_chart(theme.grafico_paradoja(resultado.por_categoria),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p4_paradoja")
     with derecha:
         components.mostrar_veredicto(
             resultado.veredicto_sentimiento,
@@ -78,7 +78,7 @@ def _seccion_pregunta_4(recorte: pd.DataFrame) -> None:
     izquierda, derecha = st.columns([3, 2])
     with izquierda:
         st.plotly_chart(theme.grafico_causa_raiz(resultado.causa_raiz),
-                        use_container_width=True)
+                        use_container_width=True, key="g_p4_causa")
     with derecha:
         components.mostrar_veredicto(
             resultado.veredicto_causa,
@@ -139,7 +139,7 @@ def _seccion_pregunta_5(recorte: pd.DataFrame) -> None:
     with izquierda:
         st.plotly_chart(
             theme.grafico_antiguedad_vs_tickets(resultado.por_bodega),
-            use_container_width=True)
+            use_container_width=True, key="g_p5_dispersion")
     with derecha:
         components.mostrar_veredicto(
             resultado.veredicto_antiguedad_tickets,
@@ -155,7 +155,7 @@ def _seccion_pregunta_5(recorte: pd.DataFrame) -> None:
     with izquierda:
         st.plotly_chart(
             theme.grafico_antiguedad_bodega(resultado.por_bodega),
-            use_container_width=True)
+            use_container_width=True, key="g_p5_antiguedad")
     with derecha:
         components.mostrar_veredicto(
             resultado.veredicto_antiguedad_bodega,
