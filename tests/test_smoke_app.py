@@ -62,9 +62,9 @@ class TestArranque:
             "Faltan categoría, bodega, ciudad o canal")
         assert len(at.toggle) >= 1, "Falta el interruptor de venta fantasma"
 
-    def test_hay_cinco_pestanas(self):
+    def test_hay_siete_pestanas(self):
         at = _app()
-        assert len(at.tabs) == 5
+        assert len(at.tabs) == 7
 
 
 @pytest.mark.smoke

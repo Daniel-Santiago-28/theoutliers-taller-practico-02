@@ -256,40 +256,46 @@ class TestContratoDeLasPestanas:
     """Cada módulo de pestaña debe exponer la interfaz que app.py espera."""
 
     def test_todas_exponen_renderizar(self):
-        from ui.tabs import (auditoria, cliente, insights_ia, operaciones,
-                             transparencia)
+        from ui.tabs import (auditoria, cliente, ficha_tecnica, insights_ia,
+                             operaciones, transparencia, vision_general)
         for modulo in (auditoria, transparencia, operaciones, cliente,
-                       insights_ia):
+                       insights_ia, vision_general, ficha_tecnica):
             assert callable(getattr(modulo, "renderizar", None)), (
                 f"{modulo.__name__} no expone renderizar()")
 
     def test_las_pestanas_de_negocio_reciben_un_dataframe(self):
         """Firma esperada: (recorte, descripcion, ...)."""
         import inspect
-        from ui.tabs import cliente, insights_ia, operaciones
+        from ui.tabs import cliente, insights_ia, operaciones, vision_general
 
-        for modulo in (operaciones, cliente, insights_ia):
+        for modulo in (operaciones, cliente, insights_ia, vision_general):
             parametros = list(
                 inspect.signature(modulo.renderizar).parameters)
             assert parametros[0] == "recorte", (
                 f"{modulo.__name__}.renderizar debe recibir el recorte primero")
 
     def test_la_curaduria_no_recibe_recorte(self):
-        """Congela la decisión de alcance de Auditoría y Transparencia.
+        """Congela la decisión de alcance de Auditoría, Transparencia y
+        Ficha Técnica.
 
-        Ninguna de las dos recibe el ``recorte`` filtrado por el panel
-        lateral. Transparencia además recibe ``integrado`` (la SSOT completa
-        de la Fase 2, no filtrada) para documentar las variables derivadas
-        y previsualizar la tabla integrada.
+        Ninguna recibe el ``recorte`` filtrado por el panel lateral: son
+        material de referencia sobre los archivos fuente completos o sobre
+        la metodología, no un análisis del subconjunto elegido por el
+        usuario. Transparencia y Ficha Técnica reciben además ``integrado``
+        (la SSOT completa de la Fase 2, no filtrada).
         """
         import inspect
-        from ui.tabs import auditoria, transparencia
+        from ui.tabs import auditoria, ficha_tecnica, transparencia
 
         assert list(inspect.signature(auditoria.renderizar).parameters) == \
             ["resultado"], "auditoria debe recibir solo la curaduría completa"
         assert list(inspect.signature(transparencia.renderizar).parameters) == \
             ["resultado", "integrado"], (
                 "transparencia debe recibir la curaduría completa y la SSOT, "
+                "nunca el recorte filtrado")
+        assert list(inspect.signature(ficha_tecnica.renderizar).parameters) == \
+            ["curaduria", "integrado"], (
+                "ficha_tecnica debe recibir la curaduría completa y la SSOT, "
                 "nunca el recorte filtrado")
 
     def test_el_sidebar_expone_las_dos_funciones(self):

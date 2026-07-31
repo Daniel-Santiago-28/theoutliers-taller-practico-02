@@ -1146,3 +1146,76 @@ def _dispersion_bodega(datos: pd.DataFrame) -> pd.DataFrame:
         tasa_tickets=("Ticket_Soporte_Abierto", "mean"),
         ventas=("SKU_ID", "count"),
     )
+
+
+# --------------------------------------------------------------------------
+# Visión general: cifras agregadas de la operación (o del recorte filtrado)
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class ResumenGeneral:
+    """Cifras agregadas para la pestaña de Visión General."""
+
+    kpis: dict = field(default_factory=dict)
+    advertencias: list[str] = field(default_factory=list)
+
+
+def analizar_resumen_general(ssot: pd.DataFrame) -> ResumenGeneral:
+    """Calcula las cifras agregadas del recorte: ingreso, margen, unidades.
+
+    No responde ninguna de las cinco preguntas gerenciales; es el punto de
+    entrada del dashboard, así que reutiliza las columnas ya derivadas por
+    ``integration.calcular_variables_derivadas`` en vez de recalcular nada.
+
+    La venta sin catálogo (SKU fantasma) y los costos atípicos excluidos no
+    tienen ``Margen_Neto`` calculable (no hay costo conocido): se advierte
+    cuántas transacciones caen en ese caso en vez de tratarlas como margen
+    cero, que inventaría rentabilidad donde no hay dato.
+
+    Args:
+        ssot: Sola Fuente de Verdad, ya filtrada por el panel lateral
+            (incluye el efecto del interruptor "Incluir venta sin catálogo").
+
+    Returns:
+        ResumenGeneral con los KPIs y las advertencias de cobertura.
+    """
+    if ssot.empty:
+        return ResumenGeneral()
+
+    con_margen = ssot["Margen_Neto"].notna()
+    transacciones = int(len(ssot))
+    ingreso_total = float(ssot["Ingreso_Bruto"].sum())
+    sin_margen = int((~con_margen).sum())
+
+    kpis = {
+        "ingreso_total_usd": round(ingreso_total, 2),
+        "margen_neto_total_usd": round(
+            float(ssot.loc[con_margen, "Margen_Neto"].sum()), 2),
+        "costo_mercancia_usd": round(
+            float(ssot.loc[con_margen, "Costo_Mercancia"].sum()), 2),
+        "costo_envio_usd": round(float(ssot["Costo_Envio"].sum()), 2),
+        "transacciones": transacciones,
+        "unidades_vendidas": int(ssot["Cantidad_Vendida"].sum()),
+        "ticket_promedio_usd": round(
+            ingreso_total / transacciones, 2) if transacciones else 0.0,
+        "skus_distintos": int(ssot["SKU_ID"].nunique()),
+        "transacciones_sin_margen": sin_margen,
+        "pct_transacciones_sin_margen": round(
+            100 * sin_margen / transacciones, 2) if transacciones else 0.0,
+    }
+    kpis["margen_pct_agregado"] = round(
+        100 * kpis["margen_neto_total_usd"] / ingreso_total, 2
+    ) if ingreso_total else 0.0
+
+    advertencias = []
+    if sin_margen:
+        advertencias.append(
+            f"{sin_margen:,} transacciones "
+            f"({kpis['pct_transacciones_sin_margen']:.1f} %) no tienen "
+            f"costo conocido (venta sin catálogo o costo atípico excluido) "
+            f"y no aportan al margen total. Use el interruptor 'Incluir "
+            f"venta sin catálogo' del panel lateral para excluirlas del "
+            f"ingreso también.")
+
+    return ResumenGeneral(kpis=kpis, advertencias=advertencias)

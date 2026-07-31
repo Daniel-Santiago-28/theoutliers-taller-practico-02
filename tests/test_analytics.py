@@ -50,6 +50,12 @@ def q5(integrado):
 
 
 @pytest.fixture(scope="session")
+def resumen(integrado):
+    """Visión general: cifras agregadas de la operación completa."""
+    return analytics.analizar_resumen_general(integrado.ssot)
+
+
+@pytest.fixture(scope="session")
 def recorte_vacio(integrado):
     """Recorte que no deja ninguna transacción, para probar robustez."""
     from datetime import date
@@ -437,6 +443,47 @@ class TestPregunta5RiesgoOperativo:
     def test_cubre_las_cinco_bodegas(self, q5):
         assert len(q5.por_bodega) == 5
         assert q5.por_bodega["antiguedad_mediana"].notna().all()
+
+
+class TestResumenGeneral:
+    """Visión general: cifras agregadas, sin veredictos estadísticos."""
+
+    def test_ingreso_total_coincide_con_la_ssot(self, resumen, integrado):
+        esperado = float(integrado.ssot["Ingreso_Bruto"].sum())
+        assert resumen.kpis["ingreso_total_usd"] == pytest.approx(
+            esperado, abs=0.01)
+
+    def test_transacciones_coincide_con_las_filas(self, resumen, integrado):
+        assert resumen.kpis["transacciones"] == len(integrado.ssot)
+
+    def test_margen_excluye_venta_sin_costo_conocido(self, resumen, integrado):
+        """Fantasma y costo atípico no tienen Margen_Neto: no deben contarse
+        como margen cero, sino advertirse por separado."""
+        esperado = int(integrado.ssot["Margen_Neto"].isna().sum())
+        assert resumen.kpis["transacciones_sin_margen"] == esperado
+        assert esperado > 0
+        assert resumen.advertencias, (
+            "Debe advertirse que hay transacciones sin margen calculable")
+
+    def test_responde_al_excluir_venta_fantasma(self, integrado):
+        """El interruptor del panel lateral debe mover el ingreso total."""
+        completo = analytics.analizar_resumen_general(integrado.ssot)
+        recorte = filters.aplicar_filtros(
+            integrado.ssot, filters.Filtros(incluir_fantasma=False))
+        filtrado = analytics.analizar_resumen_general(recorte)
+
+        assert (filtrado.kpis["ingreso_total_usd"]
+                < completo.kpis["ingreso_total_usd"])
+        assert (filtrado.kpis["transacciones_sin_margen"]
+                < completo.kpis["transacciones_sin_margen"]), (
+            "Excluir la venta fantasma debe reducir, aunque no anular, las "
+            "transacciones sin margen calculable (quedan los costos "
+            "atípicos excluidos)")
+
+    def test_recorte_vacio_no_revienta(self, recorte_vacio):
+        resultado = analytics.analizar_resumen_general(recorte_vacio)
+        assert resultado.kpis == {}
+        assert resultado.advertencias == []
 
 
 class TestRobustezBajoFiltro:

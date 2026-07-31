@@ -15,8 +15,8 @@ import streamlit as st
 
 from src import cleaning, filters, ingest, integration
 from ui import sidebar
-from ui.tabs import (auditoria, cliente, insights_ia, operaciones,
-                     transparencia)
+from ui.tabs import (auditoria, cliente, ficha_tecnica, insights_ia,
+                     operaciones, transparencia, vision_general)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,17 +77,24 @@ def main() -> None:
     if seleccion.hay_filtro_activo:
         st.info(
             f"**Filtro activo** · {seleccion.describir()} "
-            f"Las pestañas de Operaciones, Cliente e Insights de IA analizan "
-            f"únicamente estas {len(recorte):,} transacciones.", icon="🔎")
+            f"Las pestañas de Visión General, Operaciones, Cliente e "
+            f"Insights de IA analizan únicamente estas {len(recorte):,} "
+            f"transacciones.", icon="🔎")
     else:
         st.caption(
             f"Analizando la operación completa: {len(integrado.ssot):,} "
             f"transacciones. Use el panel lateral para acotar el análisis.")
 
     pestanas = st.tabs([
-        "Auditoría", "Transparencia", "Operaciones", "Cliente",
-        "Insights de IA",
+        "Visión General", "Auditoría", "Transparencia", "Operaciones",
+        "Cliente", "Insights de IA", "Ficha Técnica",
     ])
+
+    # Visión General recibe el recorte filtrado: es la puerta de entrada del
+    # dashboard y debe reflejar tanto los filtros como el interruptor
+    # "Incluir venta sin catálogo".
+    with pestanas[0]:
+        vision_general.renderizar(recorte, seleccion.describir())
 
     # Auditoría y Transparencia describen la curaduría de los archivos fuente,
     # que se ejecutó una sola vez sobre los tres activos completos. Recortarlas
@@ -95,21 +102,27 @@ def main() -> None:
     # vendidas por Online", una cifra con apariencia de autoridad y sin
     # significado: la limpieza no se hizo por subconjunto. Reciben la curaduría
     # completa a propósito, y así lo declaran en pantalla.
-    with pestanas[0]:
-        auditoria.renderizar(curaduria)
     with pestanas[1]:
+        auditoria.renderizar(curaduria)
+    with pestanas[2]:
         transparencia.renderizar(curaduria, integrado)
 
     # Las tres pestañas de negocio reciben el recorte filtrado.
-    with pestanas[2]:
+    with pestanas[3]:
         operaciones.renderizar(recorte, seleccion.describir(),
                                integrado.diagnostico_fantasma)
-    with pestanas[3]:
-        cliente.renderizar(recorte, seleccion.describir())
     with pestanas[4]:
+        cliente.renderizar(recorte, seleccion.describir())
+    with pestanas[5]:
         insights_ia.renderizar(
             recorte, seleccion.describir(), ingreso_total=ingreso_total,
             diagnostico_fantasma=integrado.diagnostico_fantasma)
+
+    # Ficha Técnica es material de referencia, como Auditoría y Transparencia:
+    # ignora el recorte a propósito. Sus ejemplos se calculan sobre la
+    # operación completa para que sean estables y siempre reproducibles.
+    with pestanas[6]:
+        ficha_tecnica.renderizar(curaduria, integrado)
 
 
 if __name__ == "__main__":

@@ -148,13 +148,14 @@ Obtenga una clave gratuita en [console.groq.com/keys](https://console.groq.com/k
 # 1. Perfilado forense de los datos crudos -> docs/perfilado_inicial.md
 python -m scripts.perfilado_inicial
 
-# 2. Suite de pruebas completa (263 pruebas, ~50 s)
+# 2. Suite de pruebas completa (287 pruebas, ~75 s)
 python -m pytest
 
 # Iteración rápida, sin las pruebas de humo de la app (~10 s)
 python -m pytest -m "not smoke"
 
-# 3. Dashboard — pestañas Auditoría y Transparencia operativas
+# 3. Dashboard — 7 pestañas: Visión General, Auditoría, Transparencia,
+#    Operaciones, Cliente, Insights de IA y Ficha Técnica
 streamlit run app.py
 ```
 
@@ -183,17 +184,23 @@ la interfaz. `ui/` solo presenta.
 └── tests/                      # casos de la guía de validación como tests
 ```
 
-### Alcance de los filtros: 3 de 5 pestañas
+### Alcance de los filtros: 4 de 7 pestañas
 
 El panel lateral filtra por fecha, categoría, bodega, ciudad y canal, y ese
-recorte propaga a **Operaciones, Cliente e Insights de IA**. Las pestañas de
-**Auditoría y Transparencia lo ignoran a propósito**: describen la curaduría de
-los archivos fuente, que se ejecutó una única vez sobre los tres activos
-completos. Un «Health Score de las Laptops vendidas por Online» no existe como
-magnitud —la limpieza no se hizo por subconjunto— y presentarlo daría una cifra
-con apariencia de autoridad y sin significado. Ambas pestañas declaran su
-alcance en pantalla, y `tests/test_app_wiring.py` congela la decisión: si
-alguien intenta pasarles un recorte, la firma cambia y el test falla.
+recorte propaga a **Visión General, Operaciones, Cliente e Insights de IA**.
+Visión General también responde al interruptor "Incluir venta sin catálogo":
+solo muestra cifras (ingreso, margen, unidades), sin veredictos estadísticos,
+así que es la puerta de entrada natural para ver el efecto de un filtro antes
+de entrar al detalle de cada pregunta.
+
+Las pestañas de **Auditoría, Transparencia y Ficha Técnica lo ignoran a
+propósito**: las dos primeras describen la curaduría de los archivos fuente,
+que se ejecutó una única vez sobre los tres activos completos —un «Health
+Score de las Laptops vendidas por Online» no existe como magnitud, la
+limpieza no se hizo por subconjunto—, y Ficha Técnica es un catálogo de
+metodología, no un análisis del recorte. Las tres declaran su alcance en
+pantalla, y `tests/test_app_wiring.py` congela la decisión: si alguien
+intenta pasarles un recorte, la firma cambia y el test falla.
 
 Una consecuencia que conviene tener presente al demostrar la app: **filtrar por
 categoría o por bodega excluye necesariamente toda la venta fantasma**, porque
