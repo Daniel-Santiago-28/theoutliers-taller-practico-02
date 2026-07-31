@@ -12,8 +12,9 @@ import json
 import pandas as pd
 import streamlit as st
 
-from src import cleaning, config
+from src import cleaning, config, integration
 from src.cleaning import ResultadoLimpieza
+from src.integration import ResultadoIntegracion
 from ui import theme
 
 _RENOMBRES_BITACORA = {
@@ -22,6 +23,11 @@ _RENOMBRES_BITACORA = {
     "valor_aplicado": "Valor aplicado",
     "evidencia_estadistica": "Evidencia estadística",
     "justificacion": "Justificación de negocio",
+}
+
+_RENOMBRES_CATALOGO = {
+    "variable": "Variable", "grupo": "Grupo",
+    "formula": "Cómo se calcula", "justificacion": "Por qué existe",
 }
 
 
@@ -141,6 +147,65 @@ def _seccion_trazabilidad(resultado: ResultadoLimpieza) -> None:
             f"correspondiente.", icon="⚠️")
 
 
+def _seccion_variables_derivadas(integrado: ResultadoIntegracion) -> None:
+    """Catálogo de las variables creadas al construir la SSOT (Fase 2) y
+    previsualización de la tabla integrada resultante.
+    """
+    st.subheader("Variables nuevas de la integración (Fase 2)")
+    st.caption(
+        "Lo anterior documenta la Fase 1: la limpieza de cada archivo por "
+        "separado. Estas columnas no existen en ningún archivo fuente; se "
+        "crean después, al construir la Sola Fuente de Verdad (SSOT), por "
+        "unión (agregar el feedback a grano de transacción, clasificar la "
+        "venta fantasma) o por fórmula sobre columnas ya curadas. Igual que "
+        "el resto de esta pestaña, se calculan una sola vez sobre la "
+        "operación completa y no se filtran desde el panel lateral."
+    )
+
+    catalogo = integration.catalogo_variables_derivadas()
+    grupos = ["(todos)"] + sorted(catalogo["grupo"].unique())
+    elegido = st.selectbox("Filtrar por grupo", grupos,
+                           key="transparencia_grupo_variables")
+    vista = catalogo if elegido == "(todos)" \
+        else catalogo[catalogo["grupo"] == elegido]
+
+    st.dataframe(
+        vista.rename(columns=_RENOMBRES_CATALOGO),
+        use_container_width=True, hide_index=True,
+        column_config={
+            "Cómo se calcula": st.column_config.TextColumn(width="medium"),
+            "Por qué existe": st.column_config.TextColumn(width="large"),
+        })
+
+    st.divider()
+    st.markdown("#### Previsualización de la tabla integrada (SSOT)")
+    st.caption(
+        "Una fila por transacción: el resultado de unir inventario, "
+        "transacciones y feedback agregado, con todas las variables "
+        "derivadas ya calculadas."
+    )
+
+    ssot = integrado.ssot
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Filas", f"{len(ssot):,}")
+    col2.metric("Columnas", f"{ssot.shape[1]:,}")
+    col3.metric("Ingreso total reconciliado",
+               f"USD {ssot['Ingreso_Bruto'].sum():,.0f}",
+               help="Debe coincidir con el ingreso del archivo original "
+                    "(ver Reconciliación de trazabilidad).")
+
+    n_filas = st.slider("Filas a previsualizar", min_value=5, max_value=100,
+                        value=20, key="transparencia_preview_n")
+    st.dataframe(ssot.head(n_filas), use_container_width=True,
+                hide_index=True)
+
+    st.download_button(
+        "Descargar la SSOT completa (CSV)",
+        data=ssot.to_csv(index=False).encode("utf-8-sig"),
+        file_name="ssot_techlogistics.csv", mime="text/csv",
+        key="descarga_ssot_transparencia")
+
+
 def _seccion_descargas(resultado: ResultadoLimpieza) -> None:
     """Botones de descarga del reporte de limpieza."""
     st.subheader("Descargar el reporte de limpieza")
@@ -167,11 +232,15 @@ def _seccion_descargas(resultado: ResultadoLimpieza) -> None:
             use_container_width=True)
 
 
-def renderizar(resultado: ResultadoLimpieza) -> None:
+def renderizar(resultado: ResultadoLimpieza,
+               integrado: ResultadoIntegracion | None = None) -> None:
     """Dibuja la pestaña completa de Transparencia.
 
     Args:
         resultado: Salida del pipeline de limpieza de la Fase 1.
+        integrado: Salida de la integración de la Fase 2 (SSOT). Si se omite,
+            la sección de variables derivadas y la previsualización de la
+            SSOT no se muestran.
     """
     st.header("Transparencia del proceso")
     st.markdown(
@@ -195,4 +264,7 @@ def renderizar(resultado: ResultadoLimpieza) -> None:
     st.divider()
     _seccion_trazabilidad(resultado)
     st.divider()
+    if integrado is not None:
+        _seccion_variables_derivadas(integrado)
+        st.divider()
     _seccion_descargas(resultado)

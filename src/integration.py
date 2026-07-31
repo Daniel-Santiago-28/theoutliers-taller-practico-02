@@ -346,6 +346,179 @@ def _criterio_precio(fantasma: pd.DataFrame,
 # Variables derivadas
 # --------------------------------------------------------------------------
 
+# Catálogo declarativo de las columnas que NO existen en ningún esquema fuente
+# y se crean al construir la SSOT: por unión (agregación de feedback,
+# clasificación fantasma) o por fórmula (calcular_variables_derivadas). Vive
+# junto al código que las crea para que no se desincronice, y lo consume la
+# pestaña de Transparencia del dashboard.
+CATALOGO_VARIABLES_DERIVADAS: list[dict[str, str]] = [
+    {
+        "variable": "Es_Venta_Fantasma",
+        "grupo": "Integración",
+        "formula": "SKU_ID de la venta ausente del maestro de inventario",
+        "justificacion": (
+            "Distingue la venta sin catálogo oficial sin descartarla: el join "
+            "es left, no inner."),
+    },
+    {
+        "variable": "Origen_Catalogo",
+        "grupo": "Integración",
+        "formula": "'Sin_Catalogo_Oficial' si Es_Venta_Fantasma, si no 'Catalogado'",
+        "justificacion": "Etiqueta legible del mismo diagnóstico, para filtros y gráficos.",
+    },
+    {
+        "variable": "N_Opiniones",
+        "grupo": "Integración",
+        "formula": "Conteo de opiniones de feedback agrupadas por Transaccion_ID",
+        "justificacion": (
+            "Transparenta cuántas respuestas se promediaron en los agregados "
+            "de esa venta."),
+    },
+    {
+        "variable": ("Rating_Producto, Rating_Logistica, Satisfaccion_NPS, "
+                     "Edad_Cliente (agregados)"),
+        "grupo": "Integración",
+        "formula": "Media del feedback agrupado por Transaccion_ID",
+        "justificacion": (
+            "Cuando varias personas opinan sobre la misma venta, el consenso "
+            "es la lectura correcta; ninguna respuesta prima sobre otra."),
+    },
+    {
+        "variable": "Ticket_Soporte_Abierto (agregado)",
+        "grupo": "Integración",
+        "formula": "Máximo (equivale a OR) del feedback agrupado por Transaccion_ID",
+        "justificacion": (
+            "Es un hecho operativo, no una opinión: si alguien abrió ticket, "
+            "la venta generó carga de soporte. Promediarlo diluiría un costo "
+            "que sí se incurrió."),
+    },
+    {
+        "variable": ("Segmento_NPS, Sentimiento, Causa_Queja, Recomienda_Marca "
+                     "(agregados)"),
+        "grupo": "Integración",
+        "formula": "Moda del feedback agrupado por Transaccion_ID (desempate alfabético)",
+        "justificacion": (
+            "Son nominales, la media no está definida. El desempate alfabético "
+            "mantiene el resultado reproducible entre ejecuciones."),
+    },
+    {
+        "variable": "Categoria_Analisis",
+        "grupo": "Integración",
+        "formula": ("'Sin_Catalogo_Oficial' si venta fantasma; si no, Categoria "
+                    "(o 'Sin_Clasificar' si quedó nula)"),
+        "justificacion": (
+            "Separa la falla de catálogo (SKU inexistente) de la falla de "
+            "calidad de registro (categoría en '???'): son dos problemas de "
+            "negocio distintos que agregar juntos escondería."),
+    },
+    {
+        "variable": "Ratio_Soporte_Categoria_Pct",
+        "grupo": "Integración",
+        "formula": ("100 × tickets / ventas_con_opinión, agrupado por "
+                    "Categoria_Analisis"),
+        "justificacion": (
+            "El denominador son las ventas con opinión registrada, no el "
+            "total: una venta sin feedback no informa si hubo o no reclamo."),
+    },
+    {
+        "variable": "Ingreso_Bruto",
+        "grupo": "Rentabilidad",
+        "formula": "Precio_Venta_Final × Cantidad_Vendida",
+        "justificacion": "Base de todo KPI financiero; reconciliada contra el archivo original.",
+    },
+    {
+        "variable": "Margen_Unitario",
+        "grupo": "Rentabilidad",
+        "formula": "Precio_Venta_Final − Costo_Unitario_USD",
+        "justificacion": "Utilidad por unidad, antes de costos logísticos.",
+    },
+    {
+        "variable": "Costo_Mercancia",
+        "grupo": "Rentabilidad",
+        "formula": "Costo_Unitario_USD × Cantidad_Vendida",
+        "justificacion": "Costo total de la mercancía vendida en la transacción.",
+    },
+    {
+        "variable": "Margen_Neto",
+        "grupo": "Rentabilidad",
+        "formula": "Margen_Unitario × Cantidad_Vendida − Costo_Envio",
+        "justificacion": (
+            "Descuenta el flete: es el gasto que erosiona la utilidad real y "
+            "sin él la rentabilidad queda sobrestimada."),
+    },
+    {
+        "variable": "Margen_Pct",
+        "grupo": "Rentabilidad",
+        "formula": "100 × Margen_Neto / Ingreso_Bruto",
+        "justificacion": "Normaliza el margen para comparar SKU de tickets muy distintos.",
+    },
+    {
+        "variable": "Es_Margen_Negativo",
+        "grupo": "Rentabilidad",
+        "formula": "Margen_Neto < 0",
+        "justificacion": "Bandera para aislar las ventas deficitarias (pregunta 1).",
+    },
+    {
+        "variable": "Brecha_Vs_Lead_Time",
+        "grupo": "Logística",
+        "formula": "Tiempo_Entrega_Real − Lead_Time_Dias",
+        "justificacion": (
+            "Proxy pedido por el enunciado. Lead_Time_Dias es el tiempo de "
+            "reposición del proveedor, no una promesa de entrega al cliente: "
+            "se nombra así para que nadie lo lea como incumplimiento de un "
+            "compromiso comercial que no está en los datos."),
+    },
+    {
+        "variable": "Benchmark_Ciudad_Dias",
+        "grupo": "Logística",
+        "formula": "Mediana de Tiempo_Entrega_Real agrupada por Ciudad_Destino",
+        "justificacion": (
+            "Línea base propia de cada plaza; evita comparar contra un "
+            "promedio global que ignora que cada ciudad opera distinto."),
+    },
+    {
+        "variable": "Brecha_Vs_Benchmark",
+        "grupo": "Logística",
+        "formula": "Tiempo_Entrega_Real − Benchmark_Ciudad_Dias",
+        "justificacion": (
+            "El verdadero indicador de nivel de servicio: mide si la entrega "
+            "fue lenta para esa ciudad específica, no en términos absolutos."),
+    },
+    {
+        "variable": "Entrega_Adversa",
+        "grupo": "Logística",
+        "formula": "Estado_Envio ∈ {Perdido, Devuelto, Retrasado}",
+        "justificacion": "Captura el desenlace del envío, no solo el tiempo transcurrido.",
+    },
+    {
+        "variable": "Bajo_Punto_Reorden",
+        "grupo": "Riesgo de inventario",
+        "formula": "Stock_Actual < Punto_Reorden",
+        "justificacion": "Señala SKU en riesgo de quiebre de stock.",
+    },
+    {
+        "variable": "Valor_Stock_Inmovilizado",
+        "grupo": "Riesgo de inventario",
+        "formula": "Stock_Actual × Costo_Unitario_USD",
+        "justificacion": "Capital de trabajo atrapado en inventario, por SKU.",
+    },
+]
+
+
+def catalogo_variables_derivadas() -> pd.DataFrame:
+    """Catálogo de variables creadas al construir la SSOT (Fase 2).
+
+    Declarativo y no derivado de introspección de código: cada fila explica
+    la fórmula y la justificación de negocio de una columna que no existe en
+    ningún esquema fuente (``config.ESQUEMAS``), para que la pestaña de
+    Transparencia del dashboard pueda documentarlas igual que la bitácora de
+    limpieza documenta las de la Fase 1.
+
+    Returns:
+        DataFrame con columnas: variable, grupo, formula, justificacion.
+    """
+    return pd.DataFrame(CATALOGO_VARIABLES_DERIVADAS)
+
 
 def calcular_variables_derivadas(df: pd.DataFrame) -> pd.DataFrame:
     """Crea las métricas de negocio sobre la SSOT ya unida.

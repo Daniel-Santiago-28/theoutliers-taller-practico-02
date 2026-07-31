@@ -98,7 +98,7 @@ def main() -> None:
     with pestanas[0]:
         auditoria.renderizar(curaduria)
     with pestanas[1]:
-        transparencia.renderizar(curaduria)
+        transparencia.renderizar(curaduria, integrado)
 
     # Las tres pestañas de negocio reciben el recorte filtrado.
     with pestanas[2]:
