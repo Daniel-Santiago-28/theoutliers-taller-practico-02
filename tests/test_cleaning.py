@@ -145,11 +145,23 @@ class TestTransacciones:
         assert trx.loc[sin_geo, "Precio_Venta_Final"].notna().all(), \
             "El ingreso debe seguir siendo trazable"
 
-    def test_cantidad_negativa_anulada_sin_imputar(self, resultado):
+    def test_cantidad_negativa_imputada_por_sku(self, resultado):
         trx = resultado.limpios["transacciones"]
-        assert int(trx["Cantidad_Invalida"].sum()) == 100
-        assert trx.loc[trx["Cantidad_Invalida"], "Cantidad_Vendida"].isna().all()
-        assert (trx["Cantidad_Vendida"].dropna() > 0).all()
+        assert int(trx["Cantidad_Vendida_Imputado"].sum()) == 100
+        assert trx["Cantidad_Vendida"].notna().all(), (
+            "Las 100 transacciones vuelven a aportar a Ingreso_Bruto")
+        assert (trx["Cantidad_Vendida"] > 0).all()
+        assert (trx["Cantidad_Vendida"] % 1 == 0).all(), \
+            "No hay unidades fraccionarias"
+
+    def test_cantidad_sin_historial_propio_usa_mediana_global(self, resultado):
+        """PROD-1899 y PROD-1309 no tienen ninguna venta válida propia y
+        deben caer en el respaldo de la mediana global (7 unidades)."""
+        trx = resultado.limpios["transacciones"]
+        huerfanos = trx[trx["SKU_ID"].isin(["PROD-1899", "PROD-1309"])
+                        & trx["Cantidad_Vendida_Imputado"]]
+        assert len(huerfanos) == 2
+        assert (huerfanos["Cantidad_Vendida"] == 7).all()
 
     def test_estado_envio_no_se_imputa(self, resultado):
         assert int(resultado.limpios["transacciones"]["Estado_Envio"]
@@ -183,10 +195,31 @@ class TestFeedback:
         assert ticket.isna().sum() == 0
         assert set(ticket.unique()) == {True, False}
 
-    def test_ratings_fuera_de_escala_anulados(self, resultado):
-        rating = resultado.limpios["feedback"]["Rating_Producto"]
-        assert int(rating.isna().sum()) == 30
-        assert rating.dropna().between(*config.RANGO_RATING).all()
+    def test_ratings_fuera_de_escala_imputados(self, resultado):
+        fbk = resultado.limpios["feedback"]
+        rating = fbk["Rating_Producto"]
+        assert int(rating.isna().sum()) == 0, \
+            "El centinela 99 se imputa con la mediana, no queda nulo"
+        assert rating.between(*config.RANGO_RATING).all()
+        assert int(fbk["Rating_Producto_Fuera_Escala"].sum()) == 30
+
+    def test_feedback_confiable_marca_grupos_conflictivos(self, resultado):
+        """767 transacciones con 2-4 opiniones: ni se borran ni se promedian
+        en silencio, se marcan."""
+        fbk = resultado.limpios["feedback"]
+        assert len(fbk) == 4_500, "Ninguna fila se elimina por esta decisión"
+        assert int((~fbk["Feedback_Confiable"]).sum()) == 1_644
+        n_transacciones_conflictivas = (
+            fbk.loc[~fbk["Feedback_Confiable"], "Transaccion_ID"].nunique())
+        assert n_transacciones_conflictivas == 767
+
+    def test_feedback_confiable_es_uniforme_por_transaccion(self, resultado):
+        """La bandera depende del grupo, no de la fila individual."""
+        fbk = resultado.limpios["feedback"]
+        variacion = fbk.groupby("Transaccion_ID")["Feedback_Confiable"].nunique()
+        assert (variacion == 1).all(), (
+            "Todas las opiniones de una misma transacción deben compartir "
+            "el mismo valor de Feedback_Confiable")
 
     def test_edades_imposibles_corregidas(self, resultado):
         edad = resultado.limpios["feedback"]["Edad_Cliente"]
@@ -231,12 +264,24 @@ class TestEstrategiaDeImputacion:
         assert cleaning._entropia_normalizada(concentrada) < 0.5
 
     def test_cada_imputacion_registra_su_evidencia(self, resultado):
-        """Sin evidencia estadística la decisión no es defendible."""
+        """Sin evidencia estadística la decisión no es defendible.
+
+        Las columnas numéricas continuas siguen la regla de Bulmer (evidencia
+        con "asimetría="). Dos excepciones documentan su propio criterio:
+        Cantidad_Vendida agrupa por SKU_ID (correlación de Spearman contra el
+        costo) y los ratings ordinales usan la mediana de las respuestas
+        válidas sin pasar por Bulmer, porque la escala Likert no es continua.
+        """
         imputaciones = [a for a in resultado.registro.acciones
                         if a.accion.startswith("Imputación")]
         assert imputaciones, "Debe haber al menos una imputación registrada"
         for accion in imputaciones:
-            assert "asimetría=" in accion.evidencia
+            if accion.columna == "Cantidad_Vendida":
+                assert "Spearman" in accion.evidencia
+            elif accion.columna in ("Rating_Producto", "Rating_Logistica"):
+                assert "mediana de las" in accion.evidencia
+            else:
+                assert "asimetría=" in accion.evidencia
             assert accion.justificacion and accion.valor_aplicado
 
 
@@ -247,8 +292,10 @@ class TestTrazabilidadDeImputaciones:
         "inventario": {"Stock_Actual_Imputado": 100,
                        "Lead_Time_Dias_Imputado": 403},
         "transacciones": {"Costo_Envio_Imputado": 834,
-                          "Tiempo_Entrega_Real_Imputado": 50},
-        "feedback": {"Edad_Cliente_Imputado": 23},
+                          "Tiempo_Entrega_Real_Imputado": 50,
+                          "Cantidad_Vendida_Imputado": 100},
+        "feedback": {"Edad_Cliente_Imputado": 23,
+                    "Rating_Producto_Imputado": 30},
     }
 
     @pytest.mark.parametrize("dataset,banderas", ESPERADAS.items())
@@ -284,11 +331,15 @@ class TestTrazabilidadDeImputaciones:
         # atenuación sería invisible y sesgaría cualquier correlación.
         assert observados.std() > trx["Costo_Envio"].std()
 
-    def test_ratings_fuera_de_escala_marcados(self, resultado):
+    def test_ratings_fuera_de_escala_marcadas_e_imputadas(self, resultado):
         fbk = resultado.limpios["feedback"]
         assert int(fbk["Rating_Producto_Fuera_Escala"].sum()) == 30
-        assert fbk.loc[fbk["Rating_Producto_Fuera_Escala"],
-                       "Rating_Producto"].isna().all()
+        assert int(fbk["Rating_Producto_Imputado"].sum()) == 30
+        imputados = fbk.loc[fbk["Rating_Producto_Fuera_Escala"], "Rating_Producto"]
+        assert imputados.notna().all(), \
+            "El centinela 99 se imputa con la mediana, ya no queda nulo"
+        assert (imputados == fbk["Rating_Producto"].median()).all()
+        assert fbk["Rating_Producto"].between(*config.RANGO_RATING).all()
 
     def test_banderas_no_afectan_el_health_score(self, resultado):
         """El score se mide sobre el esquema original, no sobre las derivadas."""

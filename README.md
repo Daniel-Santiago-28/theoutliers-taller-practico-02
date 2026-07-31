@@ -1,3 +1,16 @@
+**Curso:** Fundamentos en Ciencia de Datos — Maestría en Ciencia de Datos y Analítica, EAFIT
+**Fecha de entrega real:** 26/07/2026
+
+**Integrantes del equipo:**
+
+| Nombre completo | Cédula         |
+| --------------- | -------------- |
+| Daniel Amaya Yepes      | 1037646508 |
+| Daniel Santiago Cadavid      | 1000646110 |
+| Luis Camilo Valencia      | 1037670493 |
+
+
+
 # TechLogistics S.A.S. — Sistema de Soporte a la Decisión (DSS)
 
 Curaduría de datos y dashboard analítico para diagnosticar la erosión de margen
@@ -20,8 +33,8 @@ El perfilado forense de los datos crudos confirma la sospecha y la cuantifica:
 | Hallazgo | Magnitud |
 |---|---|
 | Ventas cuyo SKU no existe en el maestro de inventario | **1.751 de 10.000 (17,5 %)** |
-| Ingreso sin trazabilidad de costo | **USD 12,98 M de 74,57 M (17,4 %)** |
-| Transacciones catalogadas con margen unitario negativo | **3.193 de 8.249 (38,7 %)** |
+| Ingreso sin trazabilidad de costo | **USD 13,14 M de 75,28 M (17,4 %)** |
+| Transacciones catalogadas con margen unitario negativo | **3.234 de 8.239 (39,3 %)** |
 | Antigüedad mediana del último conteo físico de stock | **516 días** (relativa a la fecha de ejecución) |
 | Envíos con código de error `999` en lugar de tiempo real | **50** |
 | Registros de feedback duplicados | **500 (11,1 %)** |
@@ -44,8 +57,8 @@ Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 | Activo | Health Score antes | Después | Mejora |
 |---|---:|---:|---:|
 | Inventario | 89,75 | 99,54 | +9,79 pp |
-| Transacciones | 93,36 | 99,03 | +5,67 pp |
-| Feedback | 78,13 | 98,19 | +20,06 pp |
+| Transacciones | 93,40 | 99,11 | +5,71 pp |
+| Feedback | 78,13 | 98,22 | +20,09 pp |
 
 Cero filas eliminadas: la política por defecto **marca y conserva** en lugar de
 borrar, de modo que el ingreso total siga siendo trazable hasta el archivo
@@ -63,16 +76,16 @@ un `merge` directo produciría 10.877 filas e inflaría el ingreso en
 cualquier fan-out futuro falle de forma ruidosa.
 
 La reconciliación contra el archivo original cuadra al centavo:
-**USD 74.572.403,78** en ambos lados, diferencia 0,00.
+**USD 75.278.947,05** en ambos lados, diferencia 0,00.
 
 ### Las cinco preguntas de alta gerencia (Fase 3)
 
 | # | Pregunta | Respuesta | Evidencia |
 |---|---|---|---|
-| 1 | Fuga de capital | **Ninguna de las dos hipótesis de la junta.** No es producto gancho ni una falla del canal Online: el precio se fija con independencia del costo | ρ = 0,014 (p = 0,217); pérdida de USD 7,58 M repartida entre 878 SKU |
+| 1 | Fuga de capital | **Ninguna de las dos hipótesis de la junta.** No es producto gancho ni una falla del canal Online: el precio se fija con independencia del costo | ρ = 0,014 (p = 0,217); pérdida de USD 7,66 M repartida entre 878 SKU |
 | 2 | Crisis logística | **Ninguna zona requiere cambio de operador porque ninguna es peor.** El problema es del proceso completo | 0 de 10 correlaciones sobreviven a Bonferroni; **60,2 %** de envíos adversos, uniforme |
-| 3 | Venta invisible | **Falla de catálogo, no fraude.** Seis criterios independientes coinciden | **USD 12,98 M = 17,40 %** del ingreso; 480 SKU en bloque contiguo |
-| 4 | Paradoja de fidelidad | **La paradoja no existe:** ni el stock ni la satisfacción difieren entre categorías. La queja dominante es precio, no calidad | rating p = 0,995; stock p = 0,079; Precio/Valor = 43,7 % de las quejas |
+| 3 | Venta invisible | **Falla de catálogo, no fraude.** Seis criterios independientes coinciden | **USD 13,14 M = 17,45 %** del ingreso; 480 SKU en bloque contiguo |
+| 4 | Paradoja de fidelidad | **La paradoja no existe:** ni el stock ni la satisfacción difieren entre categorías. La queja dominante es precio, no calidad | rating p = 0,966; stock p = 0,079; Precio/Valor = 43,7 % de las quejas |
 | 5 | Riesgo operativo | **Las bodegas sí operan a ciegas, pero el riesgo aún no se ha cobrado** | **17,1 meses** de mediana sin conteo físico; tickets p = 0,835 |
 
 Tres de las cinco preguntas apuntan a relaciones que el dato no sostiene. En
@@ -226,7 +239,10 @@ Declaradas en [`src/config.py`](src/config.py) con su justificación:
 | Media vs mediana | No se decide a mano: se mide la asimetría de cada columna y se aplica la regla de Bulmer (\|a\| < 0,5 → media; si no, mediana). El estadístico queda registrado en la bitácora |
 | Nominales casi uniformes | `Categoria` (12,2 % ausente) y `Estado_Envio` (16,8 %) **no se imputan**: sin moda dominante, rellenar inyectaría masa artificial en la dimensión por la que luego se segmenta |
 | Duplicados de feedback | **No existen.** Lo que hay es una colisión de llave surrogate: los `Feedback_ID` repetidos apuntan a transacciones y clientes distintos. Se repara la llave en vez de borrar 500 opiniones legítimas |
-| Trazabilidad | Toda corrección deja una bandera booleana **en la propia fila** (`*_Imputado`, `*_Fuera_Escala`, `Cantidad_Invalida`, …), no solo una línea en la bitácora: un valor estimado nunca queda indistinguible de uno observado |
+| `Cantidad_Vendida` negativa | Las 100 filas con el centinela `-5` se imputan con la mediana de las demás ventas válidas del mismo `SKU_ID` (respaldo: mediana global si el SKU no tiene ninguna venta válida propia). El costo unitario no se usa como predictor: no correlaciona con la cantidad en este dataset (Spearman ρ ≈ -0,015) |
+| `Rating_Producto` fuera de escala | El centinela `99` (30 filas) se imputa con la mediana de las respuestas válidas, no la media: es una escala ordinal Likert (1-5), y la media asumiría distancias iguales entre categorías que la escala no garantiza |
+| Feedback con varias opiniones por venta | 767 transacciones reciben entre 2 y 4 `Feedback_ID` distintos. No se elimina ninguna fila (perdería información) ni se promedia en silencio (mezclaría clientes distintos bajo una sola venta): se marca `Feedback_Confiable = False` en cada fila del grupo para que el diagnóstico de fidelidad (pregunta 4) las excluya del análisis de calificación |
+| Trazabilidad | Toda corrección deja una bandera booleana **en la propia fila** (`*_Imputado`, `*_Fuera_Escala`, `Cantidad_Vendida_Imputado`, `Feedback_Confiable`, …), no solo una línea en la bitácora: un valor estimado nunca queda indistinguible de uno observado |
 
 ## Licencia y contexto
 

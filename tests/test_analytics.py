@@ -388,6 +388,19 @@ class TestPregunta4ParadojaFidelidad:
         assert config.ETIQUETA_SIN_CATALOGO in categorias
         assert "Sin_Clasificar" in categorias
 
+    def test_feedback_no_confiable_excluido_del_rating(self, q4, integrado):
+        """767 transacciones con feedback de varios clientes no deben
+        contaminar el veredicto de calificación por categoría."""
+        assert q4.advertencias, (
+            "Debe advertirse que hay feedback colapsado excluido")
+        assert "767" in q4.advertencias[0]
+
+        ssot = integrado.ssot
+        no_confiables = ssot[ssot["Feedback_Confiable"] == False]  # noqa: E712
+        assert q4.veredicto_sentimiento.n <= (
+            ssot["Rating_Producto"].notna().sum()
+            - no_confiables["Rating_Producto"].notna().sum())
+
 
 class TestPregunta5RiesgoOperativo:
     """La ceguera de inventario es real; su castigo aún no aparece."""

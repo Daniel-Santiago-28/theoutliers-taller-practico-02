@@ -92,14 +92,19 @@ _EFECTO_EXCLUSION = {
         "Se marcó `Fecha_Futura`. La venta conserva su importe y cuenta en el "
         "ingreso total; solo se omite en las series de tiempo."),
     "transacciones_cantidad_invalida": (
-        "Se anuló `Cantidad_Vendida` y se marcó `Cantidad_Invalida`. La "
-        "transacción conserva su `Precio_Venta_Final`."),
+        "Se anuló `Cantidad_Vendida` y se imputó con la mediana de las "
+        "demás ventas válidas del mismo SKU (o la mediana global si el SKU "
+        "no tuvo ninguna venta válida propia); se marcó "
+        "`Cantidad_Vendida_Imputado`. La transacción vuelve a aportar a "
+        "`Ingreso_Bruto`."),
     "transacciones_entrega_999": (
         "Se anuló el código de error y se imputó el tiempo de entrega; se "
         "marcó `Entrega_Codigo_Error`. La transacción queda intacta."),
     "feedback_rating_producto_fuera_escala": (
-        "Se anuló `Rating_Producto`. La opinión conserva su rating logístico, "
-        "su NPS y su comentario."),
+        "Se anuló `Rating_Producto` y se imputó con la mediana de las "
+        "respuestas válidas (escala ordinal); se marcó "
+        "`Rating_Producto_Imputado`. La opinión conserva su rating "
+        "logístico, su NPS y su comentario."),
     "feedback_id_colisionado_eliminado": (
         "⚠️ **Única exclusión que sí elimina filas.** Solo ocurre con la "
         "política 'Eliminar repeticiones' del panel lateral."),

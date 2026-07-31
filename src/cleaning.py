@@ -191,6 +191,60 @@ def _imputar_numerica(
     )
 
 
+def _imputar_cantidad_por_sku(
+    df: pd.DataFrame, mask_faltante: pd.Series, dataset: str, log: RegistroLimpieza,
+) -> None:
+    """Imputa ``Cantidad_Vendida`` con la mediana de las demás ventas válidas
+    del mismo SKU_ID, con respaldo en la mediana global.
+
+    El costo unitario no sirve como predictor: sobre las ventas válidas, la
+    correlación de Spearman entre Costo_Unitario_USD y Cantidad_Vendida es
+    ≈ -0,015 (ruido), y la mediana de unidades es prácticamente idéntica en
+    los cuatro cuartiles de costo (7-8 unidades en Q1...Q4). El SKU sí aporta
+    algo que un promedio ciego del catálogo no: ancla la imputación al
+    historial real de ese producto específico, en vez de mezclar bajo un
+    único número transacciones de escalas de precio muy distintas. Los
+    SKU sin ninguna venta válida propia (PROD-1899, PROD-1309) caen en la
+    mediana global.
+    """
+    mediana_sku = df.groupby("SKU_ID")["Cantidad_Vendida"].transform("median")
+    mediana_global = float(df["Cantidad_Vendida"].median())
+
+    resultado = (df["Cantidad_Vendida"].astype("Float64")
+                 .fillna(mediana_sku).fillna(mediana_global).round())
+
+    n_por_sku = int((mask_faltante & mediana_sku.notna()).sum())
+    n_respaldo_global = int((mask_faltante & mediana_sku.isna()).sum())
+    skus_respaldo = sorted(
+        df.loc[mask_faltante & mediana_sku.isna(), "SKU_ID"].unique())
+
+    df[sufijo_imputado("Cantidad_Vendida")] = mask_faltante
+    df["Cantidad_Vendida"] = resultado
+    log.agregar(
+        dataset=dataset, columna="Cantidad_Vendida",
+        accion="Imputación por mediana de SKU_ID (con respaldo global)",
+        criterio=("Mediana de las ventas válidas del mismo SKU_ID; mediana "
+                  "global si el SKU no tiene ninguna venta válida propia"),
+        justificacion=(
+            "Se prefiere a dejarlo nulo porque estas 100 transacciones "
+            "vuelven a aportar a Ingreso_Bruto y al análisis de "
+            "rentabilidad, con trazabilidad completa vía la bandera "
+            "Cantidad_Vendida_Imputado. El costo no se usa como predictor "
+            "porque no correlaciona con la cantidad en este dataset; el SKU "
+            "sí, porque cada producto trae consigo su propio historial de "
+            "ventas y evita mezclar bajo un solo número productos de "
+            "escalas de precio muy distintas."),
+        filas_afectadas=int(mask_faltante.sum()),
+        valor_aplicado="mediana por SKU_ID, redondeada al entero más cercano",
+        evidencia=(
+            f"correlación de Spearman costo-cantidad ≈ -0.015 (no "
+            f"informativa); {n_por_sku} filas imputadas con la mediana de su "
+            f"propio SKU; {n_respaldo_global} filas sin ninguna venta válida "
+            f"propia ({', '.join(skus_respaldo)}) usaron la mediana global "
+            f"de {mediana_global:.0f} unidades"),
+    )
+
+
 def _normalizar_categorica(
     serie: pd.Series, mapa: dict[str, str]
 ) -> pd.Series:
@@ -464,26 +518,23 @@ def limpiar_transacciones(
                                            errors="coerce")
     mask_cantidad = (df["Cantidad_Vendida"] <= 0).fillna(False)
     n_cantidad = int(mask_cantidad.sum())
-    if n_cantidad:
-        log.excluir("transacciones_cantidad_invalida", crudo.loc[mask_cantidad])
-    df["Cantidad_Invalida"] = mask_cantidad
-    df.loc[mask_cantidad, "Cantidad_Vendida"] = np.nan
     valores_neg = sorted(pd.to_numeric(
         crudo.loc[mask_cantidad, "Cantidad_Vendida"], errors="coerce").unique())
+    if n_cantidad:
+        log.excluir("transacciones_cantidad_invalida", crudo.loc[mask_cantidad])
+    df.loc[mask_cantidad, "Cantidad_Vendida"] = np.nan
     log.agregar(
         dataset=ds, columna="Cantidad_Vendida",
-        accion="Anulación sin imputar (registro conservado)",
+        accion="Reclasificación de centinela a nulo",
         criterio="Cantidad vendida debe ser estrictamente positiva",
         justificacion=(
             "El único valor negativo es -5 y aparece exactamente 100 veces: "
             "un patrón de centinela inyectado, no de devoluciones reales (que "
-            "producirían magnitudes variadas). No se imputa porque el ingreso "
-            "es Precio × Cantidad: inventar la cantidad sería inventar "
-            "facturación. Las filas se conservan marcadas y se excluyen de las "
-            "agregaciones de ingreso."),
-        filas_afectadas=n_cantidad, valor_aplicado="nulo, sin imputación",
+            "producirían magnitudes variadas)."),
+        filas_afectadas=n_cantidad, valor_aplicado="nulo",
         evidencia=f"valores negativos observados: {valores_neg}",
     )
+    _imputar_cantidad_por_sku(df, mask_cantidad, ds, log)
 
     # --- Tiempo de entrega: centinela 999 --------------------------------
     df["Tiempo_Entrega_Real"] = pd.to_numeric(df["Tiempo_Entrega_Real"],
@@ -643,6 +694,7 @@ def limpiar_feedback(
     ds = "feedback"
 
     df = _resolver_llave_feedback(df, politica_duplicados, log, ds)
+    df = _marcar_feedback_confiable(df, ds, log)
 
     # --- Ratings fuera de escala -----------------------------------------
     for columna in ("Rating_Producto", "Rating_Logistica"):
@@ -659,17 +711,35 @@ def limpiar_feedback(
         if n:
             log.agregar(
                 dataset=ds, columna=columna,
-                accion="Anulación sin imputar",
+                accion="Anulación de valores fuera de escala",
                 criterio=f"Fuera de la escala declarada {config.RANGO_RATING}",
                 justificacion=(
                     "El valor 99 es un centinela de 'sin respuesta' de la "
-                    "plataforma de encuestas, no una calificación. Afecta al "
-                    "0,7 % de los registros, proporción a la que imputar "
-                    "añadiría riesgo de sesgo sin ganancia informativa "
-                    "apreciable; se excluye de los promedios de calificación."),
-                filas_afectadas=n, valor_aplicado="nulo, sin imputación",
+                    "plataforma de encuestas, no una calificación."),
+                filas_afectadas=n, valor_aplicado="nulo",
                 evidencia=f"valores fuera de escala observados: "
                           f"{fuera_escala} ({100 * n / len(df):.2f}% de las filas)",
+            )
+
+        mediana = float(df[columna].median())
+        df[sufijo_imputado(columna)] = mask
+        df[columna] = df[columna].fillna(mediana)
+        if n:
+            log.agregar(
+                dataset=ds, columna=columna, accion="Imputación por mediana",
+                criterio="Mediana de las respuestas válidas (escala ordinal)",
+                justificacion=(
+                    f"{columna} es una calificación ordinal de "
+                    f"{config.RANGO_RATING[0]} a {config.RANGO_RATING[1]}, no "
+                    "una magnitud continua: la mediana es el estadístico de "
+                    "tendencia central correcto para datos ordinales, porque "
+                    "no asume que la distancia entre 'Malo' y 'Regular' sea "
+                    "igual a la distancia entre 'Bueno' y 'Excelente', como sí "
+                    "lo haría la media."),
+                filas_afectadas=n, valor_aplicado=f"{mediana:.0f}",
+                evidencia=(f"mediana de las {len(df) - n} respuestas válidas "
+                          f"= {mediana:.0f}; marcados en "
+                          f"{sufijo_imputado(columna)}"),
             )
 
     # --- Edad del cliente -------------------------------------------------
@@ -741,8 +811,25 @@ def limpiar_feedback(
     )
 
     # --- Recomendación y comentario --------------------------------------
+    original_recomienda = df["Recomienda_Marca"].copy()
     df["Recomienda_Marca"] = _normalizar_categorica(df["Recomienda_Marca"],
                                                     config.MAPA_RECOMIENDA)
+    unificados = int((_a_nulo_centinelas(original_recomienda).str.strip()
+                      != df["Recomienda_Marca"]).fillna(False).sum())
+    log.agregar(
+        dataset=ds, columna="Recomienda_Marca",
+        accion="Normalización de variantes",
+        criterio="Diccionario de mapeo sobre forma canónica en minúsculas",
+        justificacion=(
+            "'SI'/'NO' en mayúsculas y 'Maybe' en inglés son la misma "
+            "pregunta de fidelidad respondida por sistemas distintos. "
+            "'Maybe' se traduce a 'Indeciso' como una tercera categoría "
+            "propia, no se fuerza hacia Sí o No: es una respuesta "
+            "genuinamente distinta a una omisión, y forzarla perdería la "
+            "diferencia entre 'no sabe' y 'no responde' que la pregunta de "
+            "fidelidad necesita distinguir."),
+        filas_afectadas=unificados, valor_aplicado="4 variantes → 3 categorías",
+    )
     comentario = _a_nulo_centinelas(df["Comentario_Texto"]).str.lower()
     df["Sentimiento"] = comentario.map(config.MAPA_SENTIMIENTO).astype("string")
     df["Causa_Queja"] = comentario.map(config.MAPA_CAUSA_QUEJA).astype("string")
@@ -772,6 +859,46 @@ def _segmentar_nps(serie: pd.Series) -> pd.Series:
     etiquetas = ["Detractor", "Pasivo", "Promotor"]
     resultado = np.select(condiciones, etiquetas, default=None)
     return pd.Series(resultado, index=serie.index, dtype="string")
+
+
+def _marcar_feedback_confiable(
+    df: pd.DataFrame, dataset: str, log: RegistroLimpieza
+) -> pd.DataFrame:
+    """Marca las opiniones de un ``Transaccion_ID`` con más de un ``Feedback_ID``.
+
+    767 transacciones reciben entre 2 y 4 opiniones de clientes distintos
+    (ver ``integration.agregar_feedback_a_transaccion``). No se puede saber
+    cuál de esas filas es "la" opinión real de esa venta, así que ni se
+    elimina ninguna (perdería información) ni se promedia en silencio
+    (mezclaría clientes distintos bajo una sola venta sin dejar rastro). Se
+    marca cada fila del grupo con ``Feedback_Confiable = False`` para que el
+    análisis aguas abajo —el diagnóstico de fidelidad— pueda excluir o tratar
+    con cautela esas ventas en vez de heredar un sesgo invisible.
+    """
+    n_opiniones = df.groupby("Transaccion_ID")["Transaccion_ID"].transform("size")
+    conflictivo = n_opiniones > 1
+    df["Feedback_Confiable"] = ~conflictivo
+
+    n_filas = int(conflictivo.sum())
+    n_transacciones = int(df.loc[conflictivo, "Transaccion_ID"].nunique())
+    log.agregar(
+        dataset=dataset, columna="Feedback_Confiable",
+        accion="Marcado de grupos conflictivos (sin eliminar ni promediar)",
+        criterio="Transaccion_ID con 2 o más Feedback_ID distintos",
+        justificacion=(
+            "No se puede saber cuál de las 2-4 filas es 'la real', así que "
+            "eliminarlas arbitrariamente perdería información y "
+            "promediarlas sin avisar mezclaría opiniones de clientes "
+            "distintos bajo una sola venta. La bandera permite que el "
+            "diagnóstico de fidelidad excluya o trate con cautela estas "
+            "ventas, en vez de heredar un sesgo invisible."),
+        filas_afectadas=n_filas, valor_aplicado="Feedback_Confiable = False",
+        evidencia=(
+            f"{n_transacciones} transacciones con 2 a "
+            f"{int(n_opiniones.max())} opiniones concentran {n_filas} de las "
+            f"{len(df)} filas de feedback"),
+    )
+    return df
 
 
 def _resolver_llave_feedback(

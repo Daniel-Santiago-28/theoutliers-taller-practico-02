@@ -156,6 +156,11 @@ def agregar_feedback_a_transaccion(feedback: pd.DataFrame) -> pd.DataFrame:
       múltiples opiniones las edades diferían (amplitud mediana de 22 años),
       de modo que el promedio mezcla personas distintas. Se conserva por
       completitud pero no debe usarse para segmentación demográfica fina.
+    * **Feedback_Confiable → mínimo (AND).** La bandera ya es uniforme dentro
+      de cada grupo por construcción (``cleaning`` la marca por
+      ``Transaccion_ID``, no por fila), así que cualquier agregador daría el
+      mismo resultado; se usa el mínimo para que la semántica quede
+      explícita: la venta es confiable solo si todas sus opiniones lo son.
 
     Args:
         feedback: DataFrame de feedback limpio, a grano de opinión.
@@ -169,6 +174,7 @@ def agregar_feedback_a_transaccion(feedback: pd.DataFrame) -> pd.DataFrame:
         "Satisfaccion_NPS": "mean",
         "Edad_Cliente": "mean",
         "Ticket_Soporte_Abierto": "max",
+        "Feedback_Confiable": "min",
     }
     columnas_nominales = [config.COL_SEGMENTO_NPS, "Sentimiento",
                           "Causa_Queja", "Recomienda_Marca"]
@@ -186,6 +192,9 @@ def agregar_feedback_a_transaccion(feedback: pd.DataFrame) -> pd.DataFrame:
     if "Ticket_Soporte_Abierto" in agregado.columns:
         agregado["Ticket_Soporte_Abierto"] = (
             agregado["Ticket_Soporte_Abierto"].astype("boolean"))
+    if "Feedback_Confiable" in agregado.columns:
+        agregado["Feedback_Confiable"] = (
+            agregado["Feedback_Confiable"].astype("boolean"))
 
     logger.info("Feedback agregado: %d opiniones -> %d transacciones",
                 len(feedback), len(agregado))
@@ -400,6 +409,18 @@ CATALOGO_VARIABLES_DERIVADAS: list[dict[str, str]] = [
         "justificacion": (
             "Son nominales, la media no está definida. El desempate alfabético "
             "mantiene el resultado reproducible entre ejecuciones."),
+    },
+    {
+        "variable": "Feedback_Confiable (agregado)",
+        "grupo": "Integración",
+        "formula": "Mínimo (equivale a AND) del feedback agrupado por Transaccion_ID",
+        "justificacion": (
+            "767 transacciones reciben 2 a 4 opiniones de clientes "
+            "distintos. Ni se elimina ninguna fila ni se promedia en "
+            "silencio: cada opinión del grupo ya llega marcada en Falso "
+            "desde la Fase 1, así que el diagnóstico de fidelidad puede "
+            "excluir esas ventas del análisis de calificación en vez de "
+            "heredar un promedio que mezcla personas distintas."),
     },
     {
         "variable": "Categoria_Analisis",
@@ -679,22 +700,35 @@ def diagnosticar_politica_precios(ssot: pd.DataFrame) -> dict:
 
 
 def validar_trazabilidad(
-    ssot: pd.DataFrame, transacciones_crudas: pd.DataFrame
+    ssot: pd.DataFrame, transacciones_crudas: pd.DataFrame,
+    transacciones_curadas: pd.DataFrame,
 ) -> Reconciliacion:
     """Reconcilia el ingreso de la SSOT contra el archivo original.
 
     Criterio de aceptación de la Guía de Validación: "la suma total de ingresos
     post-limpieza debe ser trazable hasta el archivo original".
 
-    La reconciliación se hace contra el crudo restringido a las cantidades
-    válidas, no contra el crudo bruto: las 100 transacciones con cantidad -5
-    aportaban ingreso negativo y su exclusión es una decisión documentada de la
-    Fase 1, no una pérdida silenciosa.
+    La reconciliación se hace contra el crudo con la cantidad ya curada, no
+    contra el crudo bruto ni contra el crudo con las cantidades negativas
+    excluidas: las 100 transacciones con cantidad -5 se imputan en la Fase 1
+    con la mediana de ventas válidas de su propio SKU_ID, una decisión
+    documentada, no una pérdida silenciosa. El ingreso de referencia debe
+    reflejar esa decisión.
+
+    ``transacciones_curadas`` se recibe por separado de ``ssot`` (en vez de
+    leer ``Cantidad_Vendida`` directamente de la SSOT) a propósito: así la
+    validación sigue siendo capaz de detectar un fan-out del merge, que
+    inflaría ``ssot`` pero no esta referencia calculada de forma
+    independiente.
 
     Args:
         ssot: Sola Fuente de Verdad construida.
         transacciones_crudas: DataFrame de transacciones tal como salió de la
             ingesta forense (todo texto, sin coerción).
+        transacciones_curadas: DataFrame de transacciones ya limpio de la
+            Fase 1 (antes de cualquier merge), con ``Cantidad_Vendida`` ya
+            imputada. Debe conservar el mismo orden de filas que
+            ``transacciones_crudas``.
 
     Returns:
         Reconciliacion con ambos totales y su diferencia.
@@ -704,12 +738,13 @@ def validar_trazabilidad(
     """
     precio = pd.to_numeric(transacciones_crudas["Precio_Venta_Final"],
                            errors="coerce")
-    cantidad = pd.to_numeric(transacciones_crudas["Cantidad_Vendida"],
-                             errors="coerce")
+    cantidad_cruda = pd.to_numeric(transacciones_crudas["Cantidad_Vendida"],
+                                   errors="coerce")
+    cantidad_curada = pd.to_numeric(transacciones_curadas["Cantidad_Vendida"],
+                                    errors="coerce")
 
-    ingreso_bruto = float((precio * cantidad).sum())
-    validas = cantidad > 0
-    ingreso_valido = float((precio[validas] * cantidad[validas]).sum())
+    ingreso_bruto = float((precio * cantidad_cruda).sum())
+    ingreso_valido = float((precio * cantidad_curada).sum())
     ingreso_ssot = float(ssot["Ingreso_Bruto"].sum())
 
     reconciliacion = Reconciliacion(
@@ -847,7 +882,7 @@ def construir_ssot(
     if crudas is None:
         from src import ingest
         crudas = ingest.cargar_crudo("transacciones")
-    reconciliacion = validar_trazabilidad(ssot, crudas)
+    reconciliacion = validar_trazabilidad(ssot, crudas, transacciones)
 
     return ResultadoIntegracion(
         ssot=ssot, opiniones=opiniones, reconciliacion=reconciliacion,

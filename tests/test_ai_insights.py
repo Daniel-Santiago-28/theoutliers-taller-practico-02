@@ -85,7 +85,7 @@ class TestConstruirResumen:
             assert any(k.startswith(prefijo) for k in resumen)
 
     def test_cifras_clave_presentes(self, resumen):
-        assert resumen["p3_ingreso"] == "12,976,849"
+        assert resumen["p3_ingreso"] == "13,138,474"
         assert resumen["p3_skus"] == "480"
         assert resumen["p1_skus"] == "878"
 

@@ -833,6 +833,7 @@ class ParadojaFidelidad:
     veredicto_causa: Veredicto
     kpis: dict = field(default_factory=dict)
     diagnostico: str = ""
+    advertencias: list[str] = field(default_factory=list)
 
 
 def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
@@ -846,6 +847,13 @@ def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
     Cuando el sentimiento sí discrimina, la causa raíz se separa con
     ``Causa_Queja``, que distingue reclamos por calidad de reclamos por
     precio: exactamente la disyuntiva que plantea la pregunta.
+
+    Las transacciones con ``Feedback_Confiable = False`` (2 a 4 opiniones de
+    clientes distintos colapsadas en una sola fila por
+    ``integration.agregar_feedback_a_transaccion``) se excluyen del análisis
+    de calificación: promediar esas opiniones mezclaría personas distintas
+    bajo una sola venta. Siguen contando en el resto de la tabla, porque su
+    stock, precio y margen no dependen del feedback.
 
     Args:
         ssot: Sola Fuente de Verdad, ya filtrada.
@@ -862,10 +870,20 @@ def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
             veredicto_causa=_veredicto_vacio("Pregunta 4"),
             diagnostico="Sin transacciones para el filtro aplicado.")
 
+    advertencias = []
+    no_confiable = int((datos["Feedback_Confiable"] == False).sum())  # noqa: E712
+    if no_confiable:
+        advertencias.append(
+            f"{no_confiable:,} transacciones concentran el feedback de 2 a 4 "
+            f"clientes distintos en una sola fila (Feedback_Confiable = "
+            f"False). Se excluyen del análisis de calificación de producto "
+            f"para no promediar opiniones de personas distintas bajo una "
+            f"sola venta; siguen contando en el resto del análisis.")
+    confiables = datos[datos["Feedback_Confiable"] != False]  # noqa: E712
+
     por_categoria = datos.groupby("Categoria_Analisis").agg(
         transacciones=("Transaccion_ID", "count"),
         stock_medio=("Stock_Actual", "mean"),
-        rating_producto=("Rating_Producto", "mean"),
         nps_medio=("Satisfaccion_NPS", "mean"),
         tasa_tickets=("Ticket_Soporte_Abierto", "mean"),
         margen_mediano_pct=("Margen_Pct", "median"),
@@ -874,9 +892,13 @@ def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
     ).reset_index()
     por_categoria["tasa_tickets"] = (
         100 * por_categoria["tasa_tickets"]).round(2)
+    rating_confiable = (confiables.groupby("Categoria_Analisis")
+                        ["Rating_Producto"].mean().rename("rating_producto"))
+    por_categoria = por_categoria.merge(
+        rating_confiable, on="Categoria_Analisis", how="left")
 
     veredicto_sentimiento = _probar_diferencia_medianas(
-        datos, "Categoria_Analisis", "Rating_Producto", "Pregunta 4",
+        confiables, "Categoria_Analisis", "Rating_Producto", "Pregunta 4",
         "La calificación de producto sí difiere entre categorías: hay "
         "categorías con clientes medibles más molestos.",
         "La calificación de producto es estadísticamente idéntica en todas "
@@ -897,7 +919,7 @@ def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
         "insatisfacción no es atribuible a un problema de producto concreto.")
 
     causa_raiz = _tabla_causa_raiz(con_causa)
-    kpis = _kpis_fidelidad(datos, con_causa, por_categoria)
+    kpis = _kpis_fidelidad(datos, confiables, con_causa, por_categoria)
 
     if veredicto_sentimiento.concluyente and veredicto_stock.concluyente:
         diagnostico = (
@@ -926,7 +948,7 @@ def analizar_paradoja_fidelidad(ssot: pd.DataFrame) -> ParadojaFidelidad:
                                                 ascending=False),
         causa_raiz=causa_raiz, veredicto_sentimiento=veredicto_sentimiento,
         veredicto_stock=veredicto_stock, veredicto_causa=veredicto_causa,
-        kpis=kpis, diagnostico=diagnostico)
+        kpis=kpis, diagnostico=diagnostico, advertencias=advertencias)
 
 
 def _tabla_causa_raiz(con_causa: pd.DataFrame) -> pd.DataFrame:
@@ -938,15 +960,21 @@ def _tabla_causa_raiz(con_causa: pd.DataFrame) -> pd.DataFrame:
     return tabla.round(1).reset_index()
 
 
-def _kpis_fidelidad(datos: pd.DataFrame, con_causa: pd.DataFrame,
-                    por_categoria: pd.DataFrame) -> dict:
-    """Indicadores agregados de la pregunta 4."""
+def _kpis_fidelidad(datos: pd.DataFrame, confiables: pd.DataFrame,
+                    con_causa: pd.DataFrame, por_categoria: pd.DataFrame) -> dict:
+    """Indicadores agregados de la pregunta 4.
+
+    ``rating_medio_global`` se calcula sobre ``confiables`` (excluye las
+    ventas con feedback de varios clientes colapsado en una fila); el resto
+    de indicadores no depende del feedback y usa la población completa.
+    """
     kpis = {
         "categorias_evaluadas": int(len(por_categoria)),
         "stock_medio_global": round(float(datos["Stock_Actual"].mean()), 1)
         if datos["Stock_Actual"].notna().any() else 0.0,
-        "rating_medio_global": round(float(datos["Rating_Producto"].mean()), 2)
-        if datos["Rating_Producto"].notna().any() else 0.0,
+        "rating_medio_global": round(
+            float(confiables["Rating_Producto"].mean()), 2)
+        if confiables["Rating_Producto"].notna().any() else 0.0,
     }
 
     if not con_causa.empty:

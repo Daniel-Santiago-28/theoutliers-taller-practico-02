@@ -45,6 +45,9 @@ def _seccion_pregunta_4(recorte: pd.DataFrame) -> None:
          "Sobre los comentarios con causa identificada"),
     ])
 
+    for advertencia in resultado.advertencias:
+        st.caption(f"ℹ️ {advertencia}")
+
     st.divider()
 
     # --- Nivel 1: ¿existe la paradoja? -----------------------------------

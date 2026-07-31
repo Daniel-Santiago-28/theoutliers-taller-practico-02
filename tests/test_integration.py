@@ -65,12 +65,24 @@ class TestTrazabilidad:
 
     def test_ingreso_coincide_con_el_archivo_original(self, integrado,
                                                       datos_crudos):
-        """Reconciliación calculada de forma independiente al módulo."""
+        """Reconciliación calculada de forma independiente al módulo.
+
+        Replica la imputación por mediana de SKU_ID sin llamar a
+        ``cleaning``/``integration``, para que un bug en el módulo no pueda
+        camuflarse detrás de su propio cálculo.
+        """
         crudo = datos_crudos["transacciones"]
         precio = pd.to_numeric(crudo["Precio_Venta_Final"], errors="coerce")
         cantidad = pd.to_numeric(crudo["Cantidad_Vendida"], errors="coerce")
-        validas = cantidad > 0
-        esperado = float((precio[validas] * cantidad[validas]).sum())
+
+        cantidad_curada = cantidad.mask(cantidad <= 0)
+        mediana_sku = (crudo.assign(_cant=cantidad_curada)
+                       .groupby("SKU_ID")["_cant"].transform("median"))
+        cantidad_curada = cantidad_curada.fillna(mediana_sku)
+        cantidad_curada = cantidad_curada.fillna(cantidad_curada.median())
+        cantidad_curada = cantidad_curada.round()
+
+        esperado = float((precio * cantidad_curada).sum())
 
         assert integrado.ssot["Ingreso_Bruto"].sum() == pytest.approx(
             esperado, abs=integration.TOLERANCIA_RECONCILIACION)
@@ -83,13 +95,14 @@ class TestTrazabilidad:
             "Las 100 cantidades negativas restaban ingreso")
 
     def test_reconciliacion_detecta_un_fan_out_inyectado(self, integrado,
-                                                         datos_crudos):
+                                                         datos_crudos, limpios):
         """La validación debe fallar ruidosamente si alguien rompe el grano."""
         inflada = pd.concat([integrado.ssot, integrado.ssot.head(50)])
         with pytest.raises(integration.ReconciliacionFallida,
                            match="no cuadra"):
-            integration.validar_trazabilidad(inflada,
-                                             datos_crudos["transacciones"])
+            integration.validar_trazabilidad(
+                inflada, datos_crudos["transacciones"],
+                limpios.limpios["transacciones"])
 
 
 class TestVentaFantasma:
@@ -199,6 +212,14 @@ class TestAgregacionDeFeedback:
         esperado = fbk.groupby("Transaccion_ID")["Rating_Logistica"].mean()
         fusion = agregado.set_index("Transaccion_ID")["Rating_Logistica"]
         assert (fusion - esperado.reindex(fusion.index)).abs().max() < 1e-9
+
+    def test_feedback_confiable_se_propaga_a_la_ssot(self, integrado):
+        """Las 767 transacciones conflictivas deben llegar marcadas a la SSOT."""
+        ssot = integrado.ssot
+        assert int((ssot["Feedback_Confiable"] == False).sum()) == 767  # noqa: E712
+        con_una_opinion = ssot[ssot["N_Opiniones"] == 1]
+        assert con_una_opinion["Feedback_Confiable"].dropna().all(), (
+            "Las transacciones con una sola opinión deben quedar confiables")
 
     def test_moda_es_determinista(self):
         """Ante empate gana el menor alfabéticamente, no el orden de llegada."""

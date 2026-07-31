@@ -64,10 +64,13 @@ def _seccion_antes_despues(resultado: ResultadoLimpieza) -> None:
 
     st.info(
         "**Por qué la completitud puede bajar.** En transacciones cae de "
-        "97,5 % a 96,9 %, y es correcto: valores como `Ventas_Web` en la "
-        "columna de ciudad o la cantidad `-5` figuraban como datos presentes "
-        "cuando en realidad eran ausencias disfrazadas. Convertirlos en nulos "
-        "declarados empeora la métrica y mejora la honestidad del dato. Un "
+        "97,5 % a 97,0 %, y es correcto: valores como `Ventas_Web` en la "
+        "columna de ciudad figuraban como datos presentes cuando en realidad "
+        "eran ausencias disfrazadas. Convertirlos en nulos declarados empeora "
+        "la métrica y mejora la honestidad del dato. La cantidad `-5` sí se "
+        "recupera (se imputa con la mediana del propio SKU en vez de "
+        "quedar nula), así que ya no resta a la completitud; lo que sigue "
+        "restando es lo que se decidió no imputar, como `Estado_Envio`. Un "
         "Health Score de 100 % obtenido rellenando huecos con la moda sería "
         "una mentira estadística.", icon="ℹ️")
 

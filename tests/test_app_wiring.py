@@ -267,15 +267,22 @@ class TestContratoDeLasPestanas:
                 f"{modulo.__name__}.renderizar debe recibir el recorte primero")
 
     def test_la_curaduria_no_recibe_recorte(self):
-        """Congela la decisión de alcance de Auditoría y Transparencia."""
+        """Congela la decisión de alcance de Auditoría y Transparencia.
+
+        Ninguna de las dos recibe el ``recorte`` filtrado por el panel
+        lateral. Transparencia además recibe ``integrado`` (la SSOT completa
+        de la Fase 2, no filtrada) para documentar las variables derivadas
+        y previsualizar la tabla integrada.
+        """
         import inspect
         from ui.tabs import auditoria, transparencia
 
-        for modulo in (auditoria, transparencia):
-            parametros = list(
-                inspect.signature(modulo.renderizar).parameters)
-            assert parametros == ["resultado"], (
-                f"{modulo.__name__} debe recibir la curaduría completa")
+        assert list(inspect.signature(auditoria.renderizar).parameters) == \
+            ["resultado"], "auditoria debe recibir solo la curaduría completa"
+        assert list(inspect.signature(transparencia.renderizar).parameters) == \
+            ["resultado", "integrado"], (
+                "transparencia debe recibir la curaduría completa y la SSOT, "
+                "nunca el recorte filtrado")
 
     def test_el_sidebar_expone_las_dos_funciones(self):
         from ui import sidebar
