@@ -58,7 +58,8 @@ class TestArranque:
     def test_expone_los_controles_esperados(self):
         at = _app()
         assert len(at.date_input) == 1, "Falta el selector de rango de fechas"
-        assert len(at.multiselect) == 3, "Faltan categoría, bodega o canal"
+        assert len(at.multiselect) == 4, (
+            "Faltan categoría, bodega, ciudad o canal")
         assert len(at.toggle) >= 1, "Falta el interruptor de venta fantasma"
 
     def test_hay_cinco_pestanas(self):
@@ -112,9 +113,14 @@ class TestFiltrosCategoricos:
         at.multiselect[1].set_value(["Zona_Franca"]).run()
         _sin_excepcion(at, "la bodega Zona_Franca")
 
+    def test_una_sola_ciudad(self):
+        at = _app()
+        at.multiselect[2].set_value(["Medellín"]).run()
+        _sin_excepcion(at, "la ciudad Medellín")
+
     def test_un_solo_canal(self):
         at = _app()
-        at.multiselect[2].set_value(["Online"]).run()
+        at.multiselect[3].set_value(["Online"]).run()
         _sin_excepcion(at, "el canal Online")
 
     def test_excluir_la_venta_fantasma(self):
@@ -131,7 +137,7 @@ class TestRecortesExtremos:
         at = _app()
         at.multiselect[0].set_value(["Laptops"]).run()
         at.multiselect[1].set_value(["Norte"]).run()
-        at.multiselect[2].set_value(["Online"]).run()
+        at.multiselect[3].set_value(["Online"]).run()
         at.date_input[0].set_value((date(2025, 3, 1), date(2025, 3, 7))).run()
         _sin_excepcion(at, "tres filtros y una semana")
 
@@ -167,7 +173,7 @@ class TestPoliticaDeDuplicados:
 
 @pytest.mark.smoke
 class TestReiniciarFiltros:
-    """El botón debe devolver los cinco controles a su estado inicial.
+    """El botón debe devolver los seis controles a su estado inicial.
 
     Los botones se localizan por clave y no por posición: ``at.button``
     recorre el contenedor principal antes que la barra lateral, así que el
@@ -176,10 +182,11 @@ class TestReiniciarFiltros:
 
     CLAVE = "boton_reiniciar_filtros"
 
-    def _aplicar_los_cinco_filtros(self, at) -> None:
+    def _aplicar_los_seis_filtros(self, at) -> None:
         at.multiselect[0].set_value(["Laptops"]).run()
         at.multiselect[1].set_value(["Norte"]).run()
-        at.multiselect[2].set_value(["Online"]).run()
+        at.multiselect[2].set_value(["Medellín"]).run()
+        at.multiselect[3].set_value(["Online"]).run()
         at.toggle[0].set_value(False).run()
         at.date_input[0].set_value((date(2025, 3, 1), date(2025, 3, 7))).run()
 
@@ -199,11 +206,11 @@ class TestReiniciarFiltros:
         at.date_input[0].set_value((date(2025, 1, 1), date(2025, 6, 30))).run()
         assert not at.button(key=self.CLAVE).disabled
 
-    def test_reinicia_los_cinco_controles(self):
+    def test_reinicia_los_seis_controles(self):
         at = _app()
         fecha_inicial = at.date_input[0].value
 
-        self._aplicar_los_cinco_filtros(at)
+        self._aplicar_los_seis_filtros(at)
         assert at.multiselect[0].value == ["Laptops"]
         assert at.date_input[0].value != fecha_inicial
 
@@ -213,13 +220,14 @@ class TestReiniciarFiltros:
         assert at.multiselect[0].value == []
         assert at.multiselect[1].value == []
         assert at.multiselect[2].value == []
+        assert at.multiselect[3].value == []
         assert at.toggle[0].value is True
         assert at.date_input[0].value == fecha_inicial, (
             "La fecha debe volver al rango completo original")
 
     def test_tras_reiniciar_vuelve_a_deshabilitarse(self):
         at = _app()
-        self._aplicar_los_cinco_filtros(at)
+        self._aplicar_los_seis_filtros(at)
         at.button(key=self.CLAVE).click().run()
         assert at.button(key=self.CLAVE).disabled
 

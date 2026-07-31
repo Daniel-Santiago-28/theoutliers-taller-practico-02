@@ -16,8 +16,8 @@ from src.filters import Filtros, opciones_disponibles
 # porque son la única vía para poder reiniciarlos: sin una clave, Streamlit no
 # expone el estado del widget y no hay forma de devolverlo a su valor inicial.
 CLAVES_FILTRO = (
-    "filtro_fechas", "filtro_categorias", "filtro_bodegas", "filtro_canales",
-    "filtro_incluir_fantasma",
+    "filtro_fechas", "filtro_categorias", "filtro_bodegas", "filtro_ciudades",
+    "filtro_canales", "filtro_incluir_fantasma",
 )
 
 # La política de duplicados NO está en CLAVES_FILTRO a propósito: es una
@@ -91,6 +91,13 @@ def construir(ssot) -> tuple[Filtros, str]:
             "Bodega de origen", options=opciones["bodegas"],
             key="filtro_bodegas", help="Vacío = todas.")
 
+        ciudades = st.multiselect(
+            "Ciudad destino", options=opciones["ciudades"],
+            key="filtro_ciudades",
+            help="Vacío = todas. Las ventas del canal Web no tienen ciudad "
+                 "(Ciudad_Destino anulada a propósito) y quedan fuera de "
+                 "cualquier selección de ciudad.")
+
         canales = st.multiselect(
             "Canal de venta", options=opciones["canales"],
             key="filtro_canales",
@@ -108,7 +115,8 @@ def construir(ssot) -> tuple[Filtros, str]:
         # Se evalúa aquí, con los valores ya leídos, para poder deshabilitar el
         # reinicio cuando no hay nada que reiniciar.
         hay_filtro = bool(
-            categorias or bodegas or canales or not incluir_fantasma
+            categorias or bodegas or ciudades or canales
+            or not incluir_fantasma
             or desde != opciones["fecha_min"]
             or hasta != opciones["fecha_max"])
 
@@ -125,9 +133,9 @@ def construir(ssot) -> tuple[Filtros, str]:
         st.button("Reiniciar filtros", use_container_width=True,
                   disabled=not hay_filtro, key="boton_reiniciar_filtros",
                   on_click=_reiniciar_filtros,
-                  help="Devuelve fecha, categoría, bodega, canal y venta sin "
-                       "catálogo a su estado inicial. No altera las opciones "
-                       "de curaduría.")
+                  help="Devuelve fecha, categoría, bodega, ciudad, canal y "
+                       "venta sin catálogo a su estado inicial. No altera "
+                       "las opciones de curaduría.")
 
         st.button("Refrescar análisis", use_container_width=True,
                   type="primary", key="boton_refrescar_analisis",
@@ -166,7 +174,8 @@ def construir(ssot) -> tuple[Filtros, str]:
     filtros = Filtros(
         fecha_desde=desde, fecha_hasta=hasta,
         categorias=tuple(categorias), bodegas=tuple(bodegas),
-        canales=tuple(canales), incluir_fantasma=incluir_fantasma)
+        ciudades=tuple(ciudades), canales=tuple(canales),
+        incluir_fantasma=incluir_fantasma)
 
     return filtros, politica
 

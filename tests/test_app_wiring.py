@@ -20,6 +20,7 @@ RECORTES = {
     "una_categoria": filters.Filtros(categorias=("Laptops",)),
     "un_canal": filters.Filtros(canales=("Online",)),
     "una_bodega": filters.Filtros(bodegas=("Norte",)),
+    "una_ciudad": filters.Filtros(ciudades=("Medellín",)),
     "sin_fantasma": filters.Filtros(incluir_fantasma=False),
     "combinado": filters.Filtros(categorias=("Laptops",),
                                  canales=("Online",), bodegas=("Norte",)),
@@ -72,7 +73,7 @@ class TestPropagacionDelFiltro:
         assert completo.advertencias and not filtrado.advertencias
 
     @pytest.mark.parametrize("nombre", ["una_categoria", "un_canal",
-                                        "una_bodega"])
+                                        "una_bodega", "una_ciudad"])
     def test_pregunta_2_responde_al_filtro(self, integrado, nombre):
         recorte = filters.aplicar_filtros(integrado.ssot, RECORTES[nombre])
         filtrado = analytics.analizar_crisis_logistica(recorte)
@@ -100,6 +101,13 @@ class TestPropagacionDelFiltro:
                                           RECORTES["una_bodega"])
         q5 = analytics.analizar_riesgo_operativo(recorte)
         assert list(q5.por_bodega["Bodega_Origen"]) == ["Norte"]
+
+    def test_filtrar_por_una_ciudad_deja_una_sola(self, integrado):
+        recorte = filters.aplicar_filtros(integrado.ssot,
+                                          RECORTES["una_ciudad"])
+        assert set(recorte["Ciudad_Destino"].dropna()) == {"Medellín"}
+        q2 = analytics.analizar_crisis_logistica(recorte)
+        assert list(q2.desempeno_ciudad["Ciudad_Destino"]) == ["Medellín"]
 
     def test_excluir_fantasma_elimina_la_venta_invisible(self, integrado):
         """El interruptor del panel lateral debe anular la pregunta 3."""

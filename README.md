@@ -9,7 +9,7 @@
 | Daniel Santiago Cadavid      | 1000646110 |
 | Luis Camilo Valencia      | 1037670493 |
 
-
+**Enlace dashboard en streamlit:** https://theoutliers-taller-practico-02-mcvxjycv3a4mjwh4akzqmm.streamlit.app/
 
 # TechLogistics S.A.S. — Sistema de Soporte a la Decisión (DSS)
 
@@ -41,16 +41,6 @@ El perfilado forense de los datos crudos confirma la sospecha y la cuantifica:
 
 Cifras reproducibles con `python -m scripts.perfilado_inicial`.
 
-## Estado del proyecto
-
-| Fase | Contenido | Estado |
-|---|---|---|
-| 0 | Scaffolding, ingesta forense y perfilado de línea base | ✅ Completa |
-| 1 | Limpieza, imputación justificada y Health Score | ✅ Completa |
-| 2 | Integración, venta fantasma y feature engineering | ✅ Completa |
-| 3 | Dashboard Streamlit y resolución de las 5 preguntas | ✅ Completa |
-| 4a | Módulo de IA (Groq / Llama-3) | ✅ Completa |
-| 4b | Documento de hallazgos en PDF | ⬜ Pendiente |
 
 ### Resultado de la curaduría (Fase 1)
 
@@ -195,8 +185,8 @@ la interfaz. `ui/` solo presenta.
 
 ### Alcance de los filtros: 3 de 5 pestañas
 
-El panel lateral filtra por fecha, categoría, bodega y canal, y ese recorte
-propaga a **Operaciones, Cliente e Insights de IA**. Las pestañas de
+El panel lateral filtra por fecha, categoría, bodega, ciudad y canal, y ese
+recorte propaga a **Operaciones, Cliente e Insights de IA**. Las pestañas de
 **Auditoría y Transparencia lo ignoran a propósito**: describen la curaduría de
 los archivos fuente, que se ejecutó una única vez sobre los tres activos
 completos. Un «Health Score de las Laptops vendidas por Online» no existe como

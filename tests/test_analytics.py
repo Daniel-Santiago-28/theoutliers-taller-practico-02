@@ -200,6 +200,12 @@ class TestFiltros:
         assert (recorte["Categoria_Analisis"] == "Laptops").all()
         assert 0 < len(recorte) < 10_000
 
+    def test_filtro_por_ciudad(self, integrado):
+        seleccion = filters.Filtros(ciudades=("Medellín",))
+        recorte = filters.aplicar_filtros(integrado.ssot, seleccion)
+        assert (recorte["Ciudad_Destino"] == "Medellín").all()
+        assert 0 < len(recorte) < 10_000
+
     def test_filtro_por_canal_y_categoria_se_combinan(self, integrado):
         seleccion = filters.Filtros(categorias=("Laptops",),
                                     canales=("Online",))
@@ -226,7 +232,9 @@ class TestFiltros:
         opciones = filters.opciones_disponibles(integrado.ssot)
         assert "norte" not in opciones["bodegas"]
         assert "smart-phone" not in opciones["categorias"]
+        assert "med" not in opciones["ciudades"]
         assert len(opciones["canales"]) == 4
+        assert len(opciones["ciudades"]) == 5
 
     def test_descripcion_del_filtro(self):
         seleccion = filters.Filtros(categorias=("Laptops",),

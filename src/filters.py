@@ -30,13 +30,15 @@ class Filtros:
     fecha_hasta: date | None = None
     categorias: tuple[str, ...] = field(default_factory=tuple)
     bodegas: tuple[str, ...] = field(default_factory=tuple)
+    ciudades: tuple[str, ...] = field(default_factory=tuple)
     canales: tuple[str, ...] = field(default_factory=tuple)
     incluir_fantasma: bool = True
 
     @property
     def hay_filtro_activo(self) -> bool:
         return any([self.fecha_desde, self.fecha_hasta, self.categorias,
-                    self.bodegas, self.canales, not self.incluir_fantasma])
+                    self.bodegas, self.ciudades, self.canales,
+                    not self.incluir_fantasma])
 
     def describir(self) -> str:
         """Resumen legible del recorte, para la UI y el prompt de la IA."""
@@ -52,6 +54,8 @@ class Filtros:
             partes.append(f"categorías {', '.join(self.categorias)}")
         if self.bodegas:
             partes.append(f"bodegas {', '.join(self.bodegas)}")
+        if self.ciudades:
+            partes.append(f"ciudades {', '.join(self.ciudades)}")
         if self.canales:
             partes.append(f"canales {', '.join(self.canales)}")
         if not self.incluir_fantasma:
@@ -72,6 +76,7 @@ def opciones_disponibles(ssot: pd.DataFrame) -> dict:
         "fecha_max": fechas.max().date() if not fechas.empty else None,
         "categorias": sorted(ssot["Categoria_Analisis"].dropna().unique()),
         "bodegas": sorted(ssot["Bodega_Origen"].dropna().unique()),
+        "ciudades": sorted(ssot["Ciudad_Destino"].dropna().unique()),
         "canales": sorted(ssot["Canal_Venta"].dropna().unique()),
     }
 
@@ -104,6 +109,8 @@ def aplicar_filtros(ssot: pd.DataFrame, filtros: Filtros) -> pd.DataFrame:
             recorte["Categoria_Analisis"].isin(filtros.categorias)]
     if filtros.bodegas:
         recorte = recorte[recorte["Bodega_Origen"].isin(filtros.bodegas)]
+    if filtros.ciudades:
+        recorte = recorte[recorte["Ciudad_Destino"].isin(filtros.ciudades)]
     if filtros.canales:
         recorte = recorte[recorte["Canal_Venta"].isin(filtros.canales)]
     if not filtros.incluir_fantasma:
