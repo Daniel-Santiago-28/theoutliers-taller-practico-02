@@ -1002,6 +1002,7 @@ class RiesgoOperativo:
     veredicto_antiguedad_tickets: Veredicto
     veredicto_antiguedad_bodega: Veredicto
     veredicto_tickets_bodega: Veredicto
+    veredicto_nps_bodega: Veredicto
     kpis: dict = field(default_factory=dict)
     diagnostico: str = ""
 
@@ -1020,11 +1021,19 @@ def analizar_riesgo_operativo(ssot: pd.DataFrame) -> RiesgoOperativo:
     que no haya riesgo, sino que el riesgo aún no se ha materializado en
     reclamos medibles: la ceguera de inventario es real y está sin castigar.
 
+    Como complemento —no parte de la cadena causal que plantea el
+    enunciado— se prueba además si el NPS medio difiere entre bodegas. La
+    pregunta 2 ya estableció que ``Satisfaccion_NPS`` es ruido: sigue una
+    distribución casi uniforme y no correlaciona con tiempo de entrega ni
+    con las calificaciones. Esta prueba confirma (o desmentiría) que
+    tampoco discrimina por bodega, cerrando esa vía en vez de dejarla sin
+    examinar.
+
     Args:
         ssot: Sola Fuente de Verdad, ya filtrada.
 
     Returns:
-        RiesgoOperativo con la tabla por bodega y los tres veredictos.
+        RiesgoOperativo con la tabla por bodega y los cuatro veredictos.
     """
     datos = ssot[ssot["Bodega_Origen"].notna()]
     if datos.empty:
@@ -1033,6 +1042,7 @@ def analizar_riesgo_operativo(ssot: pd.DataFrame) -> RiesgoOperativo:
             veredicto_antiguedad_tickets=_veredicto_vacio("Pregunta 5"),
             veredicto_antiguedad_bodega=_veredicto_vacio("Pregunta 5"),
             veredicto_tickets_bodega=_veredicto_vacio("Pregunta 5"),
+            veredicto_nps_bodega=_veredicto_vacio("Pregunta 5"),
             diagnostico="Sin transacciones para el filtro aplicado.")
 
     por_bodega = datos.groupby("Bodega_Origen").agg(
@@ -1077,6 +1087,15 @@ def analizar_riesgo_operativo(ssot: pd.DataFrame) -> RiesgoOperativo:
         datos, "Bodega_Origen", "Ticket_Soporte_Abierto", "Pregunta 5",
         "La tasa de reclamos sí difiere entre bodegas.",
         "La tasa de reclamos es estadísticamente idéntica entre bodegas.")
+
+    veredicto_nps = _probar_diferencia_medianas(
+        datos, "Bodega_Origen", "Satisfaccion_NPS", "Pregunta 5",
+        "El NPS medio sí difiere entre bodegas: hay nodos con clientes "
+        "sistemáticamente más satisfechos o más insatisfechos.",
+        "El NPS medio es estadísticamente idéntico entre bodegas. "
+        "Consistente con el hallazgo de la pregunta 2: Satisfaccion_NPS no "
+        "porta señal utilizable en este dataset, tampoco al segmentar por "
+        "bodega.")
 
     kpis = {
         "antiguedad_mediana_global": float(
@@ -1127,6 +1146,7 @@ def analizar_riesgo_operativo(ssot: pd.DataFrame) -> RiesgoOperativo:
         veredicto_antiguedad_tickets=veredicto_correlacion,
         veredicto_antiguedad_bodega=veredicto_antiguedad,
         veredicto_tickets_bodega=veredicto_tickets,
+        veredicto_nps_bodega=veredicto_nps,
         kpis=kpis, diagnostico=diagnostico)
 
 

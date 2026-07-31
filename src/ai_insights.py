@@ -175,6 +175,8 @@ HALLAZGO 5 — CONTROL DE INVENTARIO
 - Relación entre desatención del inventario y reclamos → veredicto: \
 {p5_correlacion_veredicto}
 - Diferencia de reclamos entre bodegas → veredicto: {p5_tickets_veredicto}
+- Diferencia de satisfacción (NPS) entre bodegas → veredicto: \
+{p5_nps_veredicto}
 - Bodegas sin nomenclatura regional estándar: {p5_no_estandar} de \
 {p5_bodegas}
 
@@ -303,6 +305,7 @@ def construir_resumen(
         "p5_correlacion_veredicto":
             q5.veredicto_antiguedad_tickets.etiqueta,
         "p5_tickets_veredicto": q5.veredicto_tickets_bodega.etiqueta,
+        "p5_nps_veredicto": q5.veredicto_nps_bodega.etiqueta,
         "p5_no_estandar": q5.kpis.get("bodegas_no_estandar", 0),
         "p5_bodegas": q5.kpis.get("bodegas_evaluadas", 0),
     }

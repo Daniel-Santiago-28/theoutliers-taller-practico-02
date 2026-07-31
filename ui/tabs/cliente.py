@@ -170,6 +170,18 @@ def _seccion_pregunta_5(recorte: pd.DataFrame) -> None:
             "existe desde el momento en que se deja de contar; lo que aún no "
             "ocurre es que aflore.", icon="⚠️")
 
+    st.divider()
+
+    st.markdown("#### Complemento · ¿La satisfacción difiere entre bodegas?")
+    st.caption(
+        "No es parte de la cadena causal que plantea el enunciado: es un "
+        "chequeo adicional. La pregunta 2 ya estableció que "
+        "`Satisfaccion_NPS` no correlaciona con nada en este dataset; esta "
+        "prueba confirma si tampoco discrimina al segmentar por bodega.")
+    components.mostrar_veredicto(
+        resultado.veredicto_nps_bodega,
+        "¿El NPS medio difiere entre bodegas?")
+
     st.markdown("#### Conclusión para la junta")
     st.info(resultado.diagnostico, icon="💡")
 

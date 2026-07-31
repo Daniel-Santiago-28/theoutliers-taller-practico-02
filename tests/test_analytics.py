@@ -426,6 +426,14 @@ class TestPregunta5RiesgoOperativo:
     def test_tickets_no_difieren_entre_bodegas(self, q5):
         assert not q5.veredicto_tickets_bodega.concluyente
 
+    def test_nps_no_difiere_entre_bodegas(self, q5):
+        """Complemento a la pregunta 5: confirma que el NPS, ya establecido
+        como ruido en la pregunta 2, tampoco discrimina por bodega."""
+        assert q5.veredicto_nps_bodega.prueba == "Kruskal-Wallis"
+        assert not q5.veredicto_nps_bodega.significativo
+        assert not q5.veredicto_nps_bodega.concluyente
+        assert q5.veredicto_nps_bodega.magnitud == "trivial"
+
     def test_sin_correlacion_antiguedad_tickets(self, q5):
         assert not q5.veredicto_antiguedad_tickets.concluyente
         assert abs(q5.veredicto_antiguedad_tickets.tamano_efecto) < 0.1

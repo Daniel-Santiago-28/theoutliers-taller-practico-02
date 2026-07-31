@@ -91,7 +91,7 @@ recorte que el usuario tiene aplicado. El riesgo de diseño no es técnico sino
 de contenido: que el modelo invente cifras o recomiende actuar sobre hallazgos
 que ya sabemos que son ruido. Tres defensas:
 
-1. **El modelo no ve los datos, ve un resumen calculado.** Recibe 42 cifras ya
+1. **El modelo no ve los datos, ve un resumen calculado.** Recibe 43 cifras ya
    computadas por `analytics`; no tiene el DataFrame ni puede agregar nada por
    su cuenta, así que toda cifra que use tiene que estar en ese bloque.
 2. **El resumen incluye los veredictos estadísticos.** Cada hallazgo viaja con
